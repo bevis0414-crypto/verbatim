@@ -341,6 +341,9 @@ $('models').addEventListener('click', e => { const b = e.target.closest('.mdl');
 $('openColab').href = COLAB;
 $('openColab').addEventListener('click', () => { $('waiting').classList.add('show'); $('st1').classList.remove('now'); $('st2').classList.add('now'); });
 const api = (path, opt) => fetch(S.server + path, opt).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status)); return r.json(); });
+const MIN_ENGINE = '2026.11.20-6';  // 網站需要的最低引擎版本（AI 校對從這版開始）
+const verNum = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)-(\d+)$/); return m ? ((+m[1] * 100 + +m[2]) * 100 + +m[3]) * 1000 + +m[4] : 0; };
+const engineOld = () => S.sys && !S.sys.mock && verNum(S.sys.version) < verNum(MIN_ENGINE);
 function cleanUrl(u) { u = (u || '').trim().replace(/\/+$/, ''); return /^(https:\/\/[\w.-]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(u) ? u : null; }
 async function connect(url, quiet) {
   url = cleanUrl(url); if (!url) { if (!quiet) toast('網址格式不對，應該像 https://xxxx.trycloudflare.com'); return false; }
@@ -351,13 +354,14 @@ async function connect(url, quiet) {
     S.server = url; S.sys = s; store.set('server', url);
     setChip(true); renderModels();
     if (document.body.dataset.v === 'connect') view(S.file ? 'file' : 'drop');
-    if (s.note) toast(s.note);
+    if (engineOld()) toast('Colab 上的引擎是舊版，請在 Colab 重新整理頁面後按 Ctrl+F9 更新（這頁的逐字稿會保留）');
+    else if (s.note) toast(s.note);
     return true;
   } catch { if (!quiet) toast('連不上，Colab 可能還在啟動或已經關閉'); return false; }
 }
 function setChip(on) {
   $('cdot').className = 'dot ' + (on ? 'ok' : '');
-  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>${S.sys && !S.sys.ready ? ' · 載入模型中' : ''}` : '未連線';
+  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>${S.sys && S.sys.ready === false ? ' · 載入模型中' : ''}${engineOld() ? ' · <b style="color:var(--acc)">引擎需要更新</b>' : ''}` : '未連線';
 }
 function disconnected() {
   if (!S.server) return;
@@ -369,7 +373,8 @@ $('chip').addEventListener('click', () => { if (!S.server) return; if (confirm('
 $('manualGo').addEventListener('click', () => connect($('manualUrl').value));
 $('manualUrl').addEventListener('keydown', e => { if (e.key === 'Enter') connect(e.target.value); });
 // Colab 的「回到逐字網站」按鈕會帶著 #server=… 打開這頁；舊分頁透過 storage 事件同步連上
-addEventListener('storage', e => { if (e.key === 'verbatim:server' && e.newValue && !S.server) connect(JSON.parse(e.newValue), true); });
+addEventListener('storage', e => { if (e.key !== 'verbatim:server' || !e.newValue) return; const u = JSON.parse(e.newValue);
+  if (u && u !== S.server) connect(u, true).then(ok => ok && S.segs.length && toast('已連上新的 Colab 引擎，逐字稿都還在')); });
 setInterval(async () => {
   if (S.server) { try { S.sys = await api('/api/system'); setChip(true); renderModels(); } catch { disconnected(); } }
   else if (document.body.dataset.v === 'connect' && $('waiting').classList.contains('show')) { const u = store.get('server'); if (u) connect(u, true); }
@@ -377,7 +382,7 @@ setInterval(async () => {
 async function fromHash() {
   const m = location.hash.match(/server=([^&]+)/); if (!m) return false;
   history.replaceState(null, '', location.pathname);
-  if (await connect(decodeURIComponent(m[1]))) { toast('已連上 Colab'); return true; }
+  if (await connect(decodeURIComponent(m[1]))) { if (!engineOld()) toast('已連上 Colab'); return true; }
   return false;
 }
 addEventListener('hashchange', fromHash);
@@ -692,6 +697,7 @@ async function saveDocx() {
 /* ---------- AI 校對 ---------- */
 $('proof').addEventListener('click', () => {
   if (!S.server) return disconnected();
+  if (engineOld()) return toast('Colab 上的引擎是舊版，還沒有 AI 校對。請在 Colab 重新整理頁面後按 Ctrl+F9，完成後回到這一頁再按一次（逐字稿會保留）');
   const chars = S.segs.reduce((a, x) => a + x.text.length, 0), min = Math.max(1, Math.round(chars / 1600));
   $('pEst').innerHTML = `這份逐字稿約 ${chars.toLocaleString()} 字，預估需要 <b style="color:var(--ink)">${min} 分鐘</b>左右。第一次使用要先下載約 6 GB 的模型，會再多 2–3 分鐘。校對時可以繼續閱讀，但先不要修改文字。`;
   $('pdlg').onclose = () => { if ($('pdlg').returnValue === 'ok') startProof(); };
@@ -720,7 +726,8 @@ async function startProof() {
         break;
       }
     }
-  } catch (e) { setStatus('', 'AI 校對失敗'); S.lastError = 'AI 校對：' + e.message; $('diagBtn').hidden = false; toast('AI 校對失敗：' + e.message); }
+  } catch (e) { if (/Not Found/.test(e.message)) e.message = 'Colab 上的引擎是舊版，請在 Colab 重新整理頁面後按 Ctrl+F9 更新';
+    setStatus('', 'AI 校對失敗'); S.lastError = 'AI 校對：' + e.message; $('diagBtn').hidden = false; toast('AI 校對失敗：' + e.message); }
   finally { S.proof = false; counts(); }
 }
 $('copy').addEventListener('click', async () => {

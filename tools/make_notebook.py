@@ -75,8 +75,12 @@ if not (os.path.exists(stamp) and open(stamp).read() == want):
 
 # ④ 啟動引擎（重新執行時先關掉舊的）
 say("③ 啟動引擎並載入 Large v2 模型（第一次約 1–2 分鐘）…")
-subprocess.run("pkill -f verbatim/engine/server.py", shell=True)
-time.sleep(1)
+# 關掉任何佔用 8000 埠的舊引擎（包含更早版本放在不同路徑的引擎）
+subprocess.run("pkill -f 'verbatim/.*server.py'; fuser -k 8000/tcp", shell=True, capture_output=True)
+for _ in range(10):
+    if not alive("http://localhost:8000"): break
+    time.sleep(1)
+want_ver = re.search(r'VERSION = "([^"]+)"', open(f"{ROOT}/engine/server.py").read()).group(1)
 env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "LD_LIBRARY_PATH"))}
 env.update(PORT="8000", VERBATIM_PRELOAD="large-v2", VERBATIM_DATA=ROOT)
 log = open(f"{ROOT}/engine.log", "w")
@@ -87,6 +91,8 @@ for _ in range(480):
     if st and st.get("ready"):
         break
     time.sleep(1)
+if st and st.get("version") != want_ver:
+    fail("舊版引擎沒有關掉", f"目前執行的是 {st.get('version', '舊版')}，應該是 {want_ver}。請從上方選單「執行階段 → 中斷連線並刪除執行階段」，再按一次 Ctrl+F9。")
 if not st:
     fail("引擎啟動失敗", "<pre style='white-space:pre-wrap;font-size:12px'>" + open(f"{ROOT}/engine.log").read()[-1500:] + "</pre>")
 
