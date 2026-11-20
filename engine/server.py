@@ -51,7 +51,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 MODELS = {"large-v2": "large-v2", "large-v3": "large-v3", "turbo": "large-v3-turbo",
           "medium": "medium", "small": "small"}
-ZH_PROMPT = "以下是一段繁體中文的逐字稿，包含適當的標點符號。"
+ZH_PROMPT = "以下是繁體中文的句子。"  # 引導語越短越不容易被 Whisper 混進逐字稿
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
