@@ -1,0 +1,13 @@
+# 逐字 Verbatim 引擎依賴：全部固定版本，由 requirements.lock 鎖定所有間接依賴
+faster-whisper==1.2.1
+ctranslate2==4.9.0
+nvidia-cublas-cu12>=12.4,<13
+nvidia-cudnn-cu12>=9.1,<10
+sherpa-onnx==2.0.2
+opencc-python-reimplemented==0.1.7
+imageio-ffmpeg==0.8.1
+fastapi
+uvicorn
+python-multipart
+numpy<3
+scikit-learn

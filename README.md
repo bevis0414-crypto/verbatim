@@ -1,11 +1,28 @@
 # 逐字 Verbatim
 
-錄音轉逐字稿網站。轉錄在 Google Colab 的免費 GPU 上執行（faster-whisper），網站本身放在 GitHub Pages。
+錄音轉逐字稿網站：https://bevis0414-crypto.github.io/verbatim/
 
-- 網站：https://bevis0414-crypto.github.io/verbatim/
-- 使用：打開網站 → 按「啟動 Colab」→ 在 Colab 按 Ctrl+F9 → 點「回到逐字網站」
+轉錄在 Google Colab 的免費 GPU 上執行，網站本身放在 GitHub Pages。
 
-檔案
-- `index.html`：網站介面
-- `server.py`：Colab 上執行的轉錄伺服器（faster-whisper、講者分辨）
-- `verbatim_colab.ipynb`：一鍵啟動筆記本
+**使用方式：**打開網站 → 按「啟動 Colab」→ 在 Colab 按 Ctrl+F9 → 點「回到逐字網站」→ 拖入錄音檔。
+
+## 穩定性設計
+
+- **固定版本的執行環境**：引擎在獨立的 Python 3.11 虛擬環境中執行，所有套件由 `engine/requirements.lock` 鎖定（含 CUDA 12 函式庫、ffmpeg），不使用 Colab 內建套件，Colab 升級不會影響。
+- **自動測試**：每次更新及每週一，GitHub Actions 會用真的 Whisper 模型和三人對話錄音，完整跑一遍上傳 → 轉錄 → 講者分辨。
+- **stable 分支**：只有通過測試的版本會發佈到 `stable`，Colab 筆記本只使用 `stable`。
+- **錯誤回報**：網站上的「複製錯誤資訊」會收集版本、GPU、錯誤原因。
+
+## 檔案
+
+| 路徑 | 用途 |
+|---|---|
+| `index.html` | 網站介面 |
+| `verbatim_colab.ipynb` | 一鍵啟動筆記本（由 `tools/make_notebook.py` 產生） |
+| `engine/server.py` | 轉錄引擎（faster-whisper、講者分辨、API） |
+| `engine/diarize.py` | 講者分辨（3D-Speaker CAM++ 聲紋 + 分群，sherpa-onnx） |
+| `engine/requirements.in` / `.lock` | 依賴與完整鎖定版本 |
+| `tests/` | 測試錄音產生器與端對端測試 |
+
+更新依賴：改 `engine/requirements.in` 後執行
+`uv pip compile engine/requirements.in --python-version 3.11 --python-platform x86_64-manylinux_2_28 -o engine/requirements.lock`

@@ -77,6 +77,7 @@ details.manual summary{cursor:pointer;min-height:32px}
 .speed{background:var(--p3);border:0;border-radius:10px;height:40px;padding:0 10px}
 .status{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:14px;color:var(--mute)}
 .bar{width:180px;height:6px;border-radius:9px;background:var(--p3);overflow:hidden}
+.tb.diag{height:34px;font-size:13px;border-color:#ff5a1f66;color:var(--ink)}
 .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
 
 /* 稿紙 */
@@ -200,7 +201,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
       <button class="play" id="play" aria-label="播放"><svg viewBox="0 0 24 24" id="playIco"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></svg></button>
       <div class="time num" id="time">00:00 <span>/ 00:00</span></div>
       <select class="speed" id="speed" aria-label="播放速度"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
-      <div class="status"><span class="dot" id="dot"></span><span id="stxt">準備好了</span><div class="bar"><i id="barI"></i></div></div>
+      <div class="status"><span class="dot" id="dot"></span><span id="stxt">準備好了</span><button class="tb diag" id="diagBtn" hidden>複製錯誤資訊</button><div class="bar"><i id="barI"></i></div></div>
     </div>
   </section>
  </div>
@@ -251,7 +252,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
       <h2>顯示與匯出</h2>
       <label class="sw">標註時間戳記<input type="checkbox" id="showTs" checked></label>
       <label class="sw">同一講者的連續句子合併成段落<input type="checkbox" id="merge" checked></label>
-      <p class="note">這兩項會套用到畫面、複製和 TXT。點講者標籤可以改名，例如「里長」。</p>
+      <p class="note">這兩項會套用到畫面、複製和 TXT。點講者標籤可以改名，例如「里長」；同一個人被分成兩位時，把兩個標籤改成同一個名字就會合併。</p>
       <div class="legend" id="legend"></div>
     </div>
   </aside>
@@ -337,7 +338,7 @@ async function connect(url, quiet) {
 }
 function setChip(on) {
   $('cdot').className = 'dot ' + (on ? 'ok' : '');
-  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>` : '未連線';
+  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>${S.sys && !S.sys.ready ? ' · 載入模型中' : ''}` : '未連線';
 }
 function disconnected() {
   if (!S.server) return;
@@ -439,12 +440,17 @@ document.addEventListener('keydown', e => {
 
 /* ---------- 逐字稿：畫面上的一列可能是好幾段合併而成 ---------- */
 const spkName = i => S.names[i] || `講者 ${i + 1}`;
+// 同一人被分成兩位時，使用者把兩個標籤改成同一個名字 → 視為同一位（顏色、合併段落、圖例都跟著合併）
+const spkKey = i => spkName(i).trim();
+const spkColorId = i => { const k = spkKey(i); return Math.min(...[...new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined))].filter(j => spkKey(j) === k)); };
+const spkChip = i => `<button class="spk" data-sp="${i}" style="--c:${COLORS[spkColorId(i) % COLORS.length]}">${esc(spkName(i))}</button>`;
 const hasSpk = () => S.segs.some(s => s.speaker !== undefined);
 function blocks() {
   const merge = $('merge').checked && hasSpk(), out = [];
   S.segs.forEach((s, i) => {
     const last = out[out.length - 1];
-    if (merge && last && last.speaker === s.speaker && s.start - last.end < 8 && last.ids.length < 12) { last.ids.push(i); last.end = s.end; }
+    const same = last && (last.speaker === s.speaker || (s.speaker !== undefined && last.speaker !== undefined && spkKey(last.speaker) === spkKey(s.speaker)));
+    if (merge && same && s.start - last.end < 8 && last.ids.length < 12) { last.ids.push(i); last.end = s.end; }
     else out.push({ids:[i], start:s.start, end:s.end, speaker:s.speaker});
   });
   return out;
@@ -452,8 +458,7 @@ function blocks() {
 const CJK = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/;
 const blockText = b => b.ids.map(i => S.segs[i].text).filter(Boolean).reduce((a, t) => !a ? t : a + (CJK.test(a.slice(-1)) || CJK.test(t[0]) ? '' : ' ') + t, '');
 function rowHtml(b, k, prev, isNew) {
-  const spk = b.speaker !== undefined && (!prev || prev.speaker !== b.speaker)
-    ? `<button class="spk" data-sp="${b.speaker}" style="--c:${COLORS[b.speaker % COLORS.length]}">${esc(spkName(b.speaker))}</button>` : '';
+  const spk = b.speaker !== undefined && (!prev || prev.speaker === undefined || spkKey(prev.speaker) !== spkKey(b.speaker)) ? spkChip(b.speaker) : '';
   return `<div class="row${isNew?' new':''}${spk && k ? ' turn' : ''}" data-k="${k}" data-s="${b.start}" data-e="${b.end}" data-ids="${b.ids.join(',')}">
     <button class="ts num" data-t="${b.start}">${fmt(b.start)}</button>
     <div class="body">${spk}<p class="tx" contenteditable="plaintext-only" spellcheck="false">${esc(blockText(b))}</p></div></div>`;
@@ -477,18 +482,21 @@ paper.addEventListener('input', e => {
   counts();
 });
 function legend() {
-  const sp = [...new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined))].sort((a, b) => a - b);
-  $('legend').innerHTML = sp.map(i => `<button class="spk" data-sp="${i}" style="--c:${COLORS[i % COLORS.length]}">${esc(spkName(i))}</button>`).join('');
+  const sp = [...new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined))].sort((a, b) => a - b), seen = new Set();
+  $('legend').innerHTML = sp.filter(i => !seen.has(spkKey(i)) && seen.add(spkKey(i))).map(spkChip).join('');
 }
 $('legend').addEventListener('click', e => { const sp = e.target.closest('.spk'); if (sp) rename(+sp.dataset.sp); });
 function rename(i) {
   $('dlgT').textContent = `把「${spkName(i)}」改名為`; $('dlgIn').value = S.names[i] || ''; $('dlgIn').placeholder = `講者 ${i + 1}`;
-  $('dlg').onclose = () => { if ($('dlg').returnValue === 'ok') { const v = $('dlgIn').value.trim(); if (v) S.names[i] = v; else delete S.names[i]; renderAll(); } };
+  $('dlg').onclose = () => { if ($('dlg').returnValue !== 'ok') return;
+    const v = $('dlgIn').value.trim(), k = spkKey(i), ids = [...new Set(S.segs.map(s => s.speaker))].filter(j => j !== undefined && spkKey(j) === k);
+    ids.forEach(j => { if (v) S.names[j] = v; else delete S.names[j]; });
+    renderAll(); if (v && ids.length === 1 && [...new Set(S.segs.map(s => s.speaker))].some(j => j !== i && j !== undefined && spkKey(j) === v)) toast(`已和另一位「${v}」合併`); };
   $('dlg').showModal(); $('dlgIn').select();
 }
 function counts() {
   const segs = S.segs.filter(s => s.text), chars = segs.reduce((a, s) => a + s.text.replace(/\s/g, '').length, 0);
-  const nsp = new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined)).size;
+  const nsp = new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined).map(spkKey)).size;
   $('count').textContent = segs.length ? `${segs.length} 句 · ${chars.toLocaleString()} 字${nsp ? ` · ${nsp} 位講者` : ''}` : '';
   ['copy','exTxt','exSrt'].forEach(id => $(id).disabled = !segs.length);
 }
@@ -526,7 +534,7 @@ $('go').addEventListener('click', async () => {
   if (!S.server) return disconnected();
   if (S.segs.length && !confirm('重新轉錄會取代目前的逐字稿，確定嗎？')) return;
   savePrefs(); S.segs = []; S.names = {}; S.rev = 0; S.job = null; renderAll();
-  S.status = 'run'; renderModels(); $('go').textContent = '停止';
+  S.status = 'run'; renderModels(); $('go').textContent = '停止'; $('diagBtn').hidden = true;
   const f = S.file;
   try {
     const uid = await uploadFile(f);
@@ -541,7 +549,17 @@ $('go').addEventListener('click', async () => {
 function finish(kind, msg, isErr) {
   S.status = 'idle'; $('go').textContent = '重新轉錄'; renderModels();
   setStatus(kind, msg, kind === 'ok' ? 1 : undefined); if (isErr) toast(msg);
+  if (isErr) { S.lastError = msg; $('diagBtn').hidden = false; }
 }
+$('diagBtn').addEventListener('click', async () => {
+  let d = null; try { d = await api('/api/diag'); } catch {}
+  const info = ['【逐字 Verbatim 錯誤回報】', '時間：' + new Date().toLocaleString('zh-TW'), '錯誤：' + (S.lastError || ''),
+    '檔案：' + (S.file ? `${S.file.name}（${mb(S.file.size)}，${S.file.type || '未知格式'}）` : '—'),
+    '模型：' + S.model + '　講者：' + $('spk').value + '　語言：' + ($('lang').value || '自動'),
+    '瀏覽器：' + navigator.userAgent, '引擎：' + (d ? JSON.stringify(d) : '（無法連線到 Colab）')].join('\n');
+  try { await navigator.clipboard.writeText(info); } catch { const t = document.createElement('textarea'); t.value = info; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  toast('已複製，貼給網站管理者就可以了');
+});
 async function poll(f) {
   if (S.file !== f) return;
   try {
@@ -554,7 +572,8 @@ async function poll(f) {
     else if (j.status === 'loading') setStatus('run', '載入模型中（換模型時約需 1–2 分鐘）…');
     else if (j.status === 'transcribing') setStatus('run', `轉錄中 ${Math.round(j.progress*100)}%${lang}`, j.progress);
     else if (j.status === 'diarizing') setStatus('run', '分辨講者中…', 1);
-    else if (j.status === 'done') { finish('ok', `完成${lang} · ${MODELS.find(m => m.key === S.model)?.name || ''}`); toast(j.warning || '轉錄完成'); return; }
+    else if (j.status === 'done') { finish('ok', `完成${lang} · ${MODELS.find(m => m.key === S.model)?.name || ''}`); toast(j.warning || '轉錄完成');
+      if (j.warning) { S.lastError = j.warning; $('diagBtn').hidden = false; } return; }
     else if (j.status === 'cancelled') return finish('', '已停止');
     else if (j.status === 'error') return finish('', '轉錄失敗：' + (j.error || '未知錯誤'), true);
   } catch (e) {

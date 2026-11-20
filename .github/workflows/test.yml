@@ -1,0 +1,38 @@
+name: 引擎自動測試
+
+# 每次更新、加上每週一次，用真的 Whisper 和講者模型把「上傳 → 轉錄 → 分辨講者」完整跑一遍。
+# 通過才會更新 stable 分支；Colab 筆記本只使用 stable，所以沒通過測試的改動不會到使用者手上。
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * 1"   # 每週一 10:17（臺灣時間）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 建立固定版本的執行環境（與 Colab 相同）
+        run: |
+          python3 -m pip install -q uv==0.11.32
+          uv venv -p 3.11 .venv
+          uv pip install --python .venv -r engine/requirements.lock
+
+      - name: 產生三人對話測試錄音
+        run: .venv/bin/python tests/make_dialog.py /tmp/t
+
+      - name: 端對端測試（上傳、轉錄、講者分辨）
+        run: .venv/bin/python tests/e2e.py /tmp/t/dialog.mp3 /tmp/t/dialog_truth.json small
+
+      - name: 測試通過，發佈到 stable
+        if: success() && github.ref == 'refs/heads/main'
+        run: git push origin HEAD:refs/heads/stable --force
