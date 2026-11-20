@@ -55,10 +55,14 @@ def get_model(key):
     dev = device_info()["device"]
     try:
         m = WhisperModel(name, device=dev, compute_type="float16" if dev == "cuda" else "int8")
+        if dev == "cuda":  # 先試跑一秒空白音訊，確認 GPU 函式庫（cuBLAS／cuDNN）真的載得到
+            import numpy as np
+            list(m.transcribe(np.zeros(16000, np.float32), language="en")[0])
     except Exception as e:
         if dev != "cuda":
             raise
-        _state["device"], _state["note"] = "cpu", f"GPU 載入失敗，改用 CPU：{e}"
+        traceback.print_exc()
+        _state["device"], _state["note"] = "cpu", f"GPU 無法使用，暫時改用 CPU（會很慢）：{e}"
         m = WhisperModel(name, device="cpu", compute_type="int8")
     _model.update(name=name, obj=m)
     return m
