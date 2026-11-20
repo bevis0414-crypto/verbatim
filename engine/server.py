@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.20-6"
+VERSION = "2026.11.20-7"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -172,7 +172,13 @@ def fix_text(text):
     if _YI is None:
         import re
         _YI = re.compile(r"壹(?![拾佰仟萬億圓元角])")
-    return _YI.sub("一", text)
+    text = _YI.sub("一", text)
+    # 中文句子裡的半形標點改成全形（Whisper 常輸出半形逗號、問號）；數字中的小數點不受影響
+    import re
+    for a, b in ((",", "，"), ("?", "？"), ("!", "！"), (":", "："), (";", "；")):
+        text = re.sub(rf"(?<=[\u4e00-\u9fff]){re.escape(a)}\s*", b, text)
+    text = re.sub(r"(?<=[\u4e00-\u9fff])\.(?!\d)\s*", "。", text)
+    return text
 
 
 def to_trad(text):
