@@ -1,0 +1,102 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+system: {'app': 'verbatim', 'version': '2026.11.20-7', 'device': 'cpu', 'gpu': None, 'note': '', 'ready': True, 'mock': False, 'loaded': None}
+{
+ "id": "833e2b8490",
+ "status": "done",
+ "progress": 1.0,
+ "duration": 35.61,
+ "language": "zh",
+ "error": null,
+ "warning": null,
+ "rev": 1,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 8.0,
+   "text": "大家好，今天的工作方如要想聽聽各位對公園擺散的講馬。",
+   "speaker": 0
+  },
+  {
+   "start": 8.0,
+   "end": 12.0,
+   "text": "我記得高大橋架的燈柴按樓外上樓路歸怕。",
+   "speaker": 1
+  },
+  {
+   "start": 12.0,
+   "end": 19.0,
+   "text": "瞭解那照明是第一個議題，還有其他意見了。",
+   "speaker": 0
+  },
+  {
+   "start": 19.0,
+   "end": 24.0,
+   "text": "很多黨對希望多一點有真心的對抑，可以坐下來休息。",
+   "speaker": 2
+  },
+  {
+   "start": 24.0,
+   "end": 28.0,
+   "text": "另外，劇情車騎得很快，最好把不倒和受到生態。",
+   "speaker": 1
+  },
+  {
+   "start": 28.0,
+   "end": 35.0,
+   "text": "考我們把這些意見劇下來唸下一文帶考論配置。",
+   "speaker": 0
+  }
+ ],
+ "full": true,
+ "ahead": 0
+}
+diag: {"version": "2026.11.20-7", "python": "3.11.15", "device": "cpu", "gpu": null, "note": "", "model": "small", "speaker_model": "ok", "packages": {"faster-whisper": "1.2.1", "ctranslate2": "4.9.0", "sherpa-onnx": "2.0.2", "nvidia-cublas-cu12": "12.9.3.13", "nvidia-cudnn-cu12": "9.28.1.4", "numpy": "2.4.6"}, "errors": []}
+proofread: {
+ "status": "done",
+ "done": 6,
+ "total": 6,
+ "error": null,
+ "result": [
+  {
+   "text": "大家好，今天的工作坊如想聽聽各位對公園擺散的講馬。",
+   "para": false,
+   "changed": true
+  },
+  {
+   "text": "我記得高大橋架的燈柴按樓外上樓路歸怕。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "瞭解那照明是第一個議題，還有其他意見了。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "很多黨對希望多一點有真心的對抑，可以坐下來休息。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "另外，劇情車騎得很快，最好把不倒和受到生態。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "考我們把這些意見劇下來唸下一文帶考論配置。",
+   "para": false,
+   "changed": false
+  }
+ ]
+}
+✅ 完成
+✅ 沒有警告
+✅ 有逐字稿
+✅ 繁體輸出
+✅ 內容大致正確
+✅ 沒有「壹」
+✅ 講者人數
+✅ 校對完成
+✅ 校對沒有掉句
+✅ 校對後仍是繁體
