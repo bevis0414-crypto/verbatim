@@ -1,7 +1,35 @@
 """逐字 Verbatim — 在 Colab GPU 上跑的錄音轉逐字稿伺服器（faster-whisper + 講者分辨）"""
 import os, uuid, time, queue, threading, traceback, gc
 
-try:  # 先載入 torch，讓 Colab 內建的 cuDNN 進到行程裡
+VERSION = "2026.11.20-3"
+
+
+def _preload_cuda12():
+    """faster-whisper（CTranslate2）要 CUDA 12 的 cuBLAS／cuDNN。Colab 內建的可能是更新的版本，
+    所以先把 pip 裝的 nvidia-cublas-cu12／nvidia-cudnn-cu12 載進行程，之後以檔名找函式庫時就找得到。"""
+    import ctypes, glob, site
+    files = []
+    for sp in site.getsitepackages():
+        for pat in ("nvidia/cublas/lib/libcublas*.so.12", "nvidia/cudnn/lib/libcudnn*.so.9"):
+            files += glob.glob(os.path.join(sp, pat))
+    left = sorted(set(files), key=lambda f: ("Lt" not in f, f))
+    for _ in range(4):  # 有相依順序，載不進的下一輪再試
+        left = [f for f in left if not _try_load(ctypes, f)]
+        if not left:
+            break
+
+
+def _try_load(ctypes, f):
+    try:
+        ctypes.CDLL(f, mode=ctypes.RTLD_GLOBAL)
+        return True
+    except OSError:
+        return False
+
+
+_preload_cuda12()
+
+try:
     import torch
 except Exception:
     torch = None
@@ -230,7 +258,7 @@ def index():
 @app.get("/api/system")
 def system():
     s = device_info()
-    return {"app": "verbatim", "device": s["device"], "gpu": s["gpu"], "note": s["note"], "mock": MOCK,
+    return {"app": "verbatim", "version": VERSION, "device": s["device"], "gpu": s["gpu"], "note": s["note"], "mock": MOCK,
             "loaded": next((k for k, v in MODELS.items() if v == _model["name"]), None)}
 
 
