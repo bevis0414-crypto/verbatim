@@ -64,6 +64,16 @@ def get_model(key):
     return m
 
 
+def load_audio(path, sr=16000):
+    """用 ffmpeg 解碼成 16 kHz 單聲道，不依賴 PyAV（新版 PyAV 與 faster-whisper 不相容）"""
+    import subprocess, numpy as np
+    r = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", path, "-f", "s16le", "-ac", "1",
+                        "-acodec", "pcm_s16le", "-ar", str(sr), "-"], capture_output=True)
+    if r.returncode != 0 or not r.stdout:
+        raise RuntimeError("無法讀取這個檔案的音訊：" + (r.stderr.decode(errors="ignore").strip()[-200:] or "格式不支援"))
+    return np.frombuffer(r.stdout, np.int16).astype(np.float32) / 32768.0
+
+
 def to_trad(text):
     global _cc
     if _cc is None:
@@ -95,14 +105,12 @@ def speaker_encoder():
     return _spk["enc"]
 
 
-def diarize(path, segs, n_speakers):
+def diarize(audio, segs, n_speakers):
     import numpy as np
-    from faster_whisper.audio import decode_audio
     from sklearn.cluster import AgglomerativeClustering
     if len(segs) < 2:
         return [0] * len(segs)
     enc, sr = speaker_encoder(), 16000
-    audio = decode_audio(path, sampling_rate=sr)
     embs, idx = [], []
     for i, s in enumerate(segs):
         a, b = int(s["start"] * sr), int(s["end"] * sr)
@@ -139,11 +147,12 @@ def run_job(jid):
         if MOCK:
             return mock_run(job)
         job["status"] = "loading"
+        audio = load_audio(job["path"])
         model = get_model(job["model"])
         job["status"] = "transcribing"
         lang = job["language"] or None
         prompt = " ".join(p for p in [ZH_PROMPT if lang in (None, "zh") else "", job["hint"]] if p) or None
-        segs, info = model.transcribe(job["path"], language=lang, beam_size=5, vad_filter=True,
+        segs, info = model.transcribe(audio, language=lang, beam_size=5, vad_filter=True,
                                       initial_prompt=prompt, condition_on_previous_text=False)
         job["duration"], job["language"] = round(info.duration, 2), info.language
         trad = job["trad"] and info.language == "zh"
@@ -162,7 +171,7 @@ def run_job(jid):
             job["status"] = "diarizing"
             n = int(job["speakers"]) if job["speakers"].isdigit() else 0
             try:
-                for s, lab in zip(job["segments"], diarize(job["path"], job["segments"], n)):
+                for s, lab in zip(job["segments"], diarize(audio, job["segments"], n)):
                     s["speaker"] = lab
                 job["rev"] += 1
             except Exception as e:
@@ -296,4 +305,6 @@ def start(port=8000):
 
 if __name__ == "__main__":
     import uvicorn
+    if os.environ.get("VERBATIM_PRELOAD"):
+        preload(os.environ["VERBATIM_PRELOAD"])
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
