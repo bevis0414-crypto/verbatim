@@ -77,6 +77,14 @@ details.manual summary{cursor:pointer;min-height:32px}
 .speed{background:var(--p3);border:0;border-radius:10px;height:40px;padding:0 10px}
 .status{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:14px;color:var(--mute)}
 .bar{width:180px;height:6px;border-radius:9px;background:var(--p3);overflow:hidden}
+.tb.ai{border-color:#ff5a1f88;color:var(--ink)}.tb.ai:hover:not(:disabled){background:var(--accSoft)}
+.menu{position:fixed;z-index:8;background:var(--p2);border:1px solid var(--line);border-radius:14px;padding:6px;min-width:260px;box-shadow:0 12px 32px #0008}
+.menu button{display:block;width:100%;text-align:left;border:0;background:none;border-radius:10px;padding:10px 12px;font-size:15px}
+.menu button:hover{background:var(--p3)}
+.menu small{display:block;color:var(--mute);font-size:12px}
+mark.ai{background:#ff5a1f2e;color:inherit;border-radius:3px;box-shadow:inset 0 -2px 0 #ff5a1f99}
+.rv{border:0;background:none;color:var(--mute);font-size:12px;padding:2px 8px;border-radius:6px;margin-left:6px}
+.rv:hover{color:var(--acc);background:var(--p3)}
 .tb.diag{height:34px;font-size:13px;border-color:#ff5a1f66;color:var(--ink)}
 .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
 
@@ -195,6 +203,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
       <div class="fmeta num" id="fmeta"></div>
       <button class="btn ghost" id="change">換檔案</button>
       <button class="btn acc" id="go">開始轉錄</button>
+      <button class="btn acc" id="dl" hidden>下載逐字稿 ▾</button>
     </div>
     <div class="wave" id="wave"><canvas id="cv"></canvas></div>
     <div class="ctrl">
@@ -211,9 +220,9 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
   <section>
     <div class="tools">
       <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="搜尋逐字稿" aria-label="搜尋逐字稿"></div>
+      <button class="tb ai" id="proof" disabled>✦ AI 校對</button>
       <button class="tb" id="copy" disabled>複製全文</button>
-      <button class="tb" id="exTxt" disabled>下載 TXT</button>
-      <button class="tb" id="exSrt" disabled>下載 SRT 字幕</button>
+      <button class="tb" id="dl2" disabled>下載 ▾</button>
     </div>
     <div class="paper" id="paper"></div>
     <div class="foot"><span id="count"></span><label class="sw" style="min-height:0;gap:8px">播放時自動捲動<input type="checkbox" id="follow" checked style="transform:scale(.8)"></label></div>
@@ -251,13 +260,23 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
     <div class="card">
       <h2>顯示與匯出</h2>
       <label class="sw">標註時間戳記<input type="checkbox" id="showTs" checked></label>
-      <label class="sw">同一講者的連續句子合併成段落<input type="checkbox" id="merge" checked></label>
-      <p class="note">這兩項會套用到畫面、複製和 TXT。點講者標籤可以改名，例如「里長」；同一個人被分成兩位時，把兩個標籤改成同一個名字就會合併。</p>
+      <label class="sw">合併成段落（依講者、AI 分段）<input type="checkbox" id="merge" checked></label>
+      <label class="sw">標示 AI 修改的字<input type="checkbox" id="showAi" checked></label>
+      <p class="note">時間戳記和分段會套用到畫面、複製和下載。點講者標籤可以改名，例如「里長」；同一個人被分成兩位時，把兩個標籤改成同一個名字就會合併。</p>
       <div class="legend" id="legend"></div>
     </div>
   </aside>
 </main>
 <div class="toast" id="toast"></div>
+<div class="menu" id="dlMenu" hidden>
+  <button data-f="docx">Word 文件（.docx）<small>含講者、時間戳記、分段，可直接編輯列印</small></button>
+  <button data-f="txt">純文字（.txt）<small>依目前顯示設定</small></button>
+  <button data-f="srt">字幕檔（.srt）<small>可匯入影片剪輯軟體</small></button>
+</div>
+<dialog id="pdlg"><form method="dialog"><h3>AI 校對</h3>
+  <p style="color:var(--mute);margin:0 0 6px;line-height:1.7">用開源模型 Qwen3 在 Colab 上修正<b style="color:var(--ink)">錯字、標點和分段</b>，不會改寫內容。改了哪些字會用橘色標出來，每一段都可以還原。</p>
+  <p style="color:var(--mute);margin:0;line-height:1.7" id="pEst"></p>
+  <div class="dRow"><button class="btn ghost" value="cancel">取消</button><button class="btn acc" value="ok">開始校對</button></div></form></dialog>
 <dialog id="dlg"><form method="dialog" id="dlgForm"><h3 id="dlgT">講者改名</h3><input id="dlgIn" autocomplete="off"><div class="dRow"><button class="btn ghost" value="cancel" formnovalidate>取消</button><button class="btn acc" value="ok">確定</button></div></form></dialog>
 <audio id="au" preload="metadata"></audio>
 
@@ -303,11 +322,11 @@ $('deco').innerHTML = Array.from({length:70}, (_, i) => { const a = 6 + Math.abs
 const P = store.get('prefs', {});
 if (MODELS.some(m => m.key === P.model)) S.model = P.model;
 for (const [id, k] of [['lang','lang'],['spk','spk'],['hint','hint']]) if (P[k] !== undefined) $(id).value = P[k];
-for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge']]) if (P[k] !== undefined) $(id).checked = P[k];
+for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge'],['showAi','showAi']]) if (P[k] !== undefined) $(id).checked = P[k];
 const savePrefs = () => store.set('prefs', {model:S.model, lang:$('lang').value, spk:$('spk').value, hint:$('hint').value,
-  trad:$('trad').checked, showTs:$('showTs').checked, merge:$('merge').checked});
+  trad:$('trad').checked, showTs:$('showTs').checked, merge:$('merge').checked, showAi:$('showAi').checked});
 ['lang','spk','hint','trad'].forEach(id => $(id).addEventListener('change', savePrefs));
-['showTs','merge'].forEach(id => $(id).addEventListener('change', () => { savePrefs(); renderAll(); }));
+['showTs','merge','showAi'].forEach(id => $(id).addEventListener('change', () => { savePrefs(); renderAll(); }));
 
 const pips = n => `<span class="pips">${[1,2,3,4].map(i => `<i class="${i<=n?'f':''}"></i>`).join('')}</span>`;
 function renderModels() {
@@ -445,23 +464,43 @@ const spkKey = i => spkName(i).trim();
 const spkColorId = i => { const k = spkKey(i); return Math.min(...[...new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined))].filter(j => spkKey(j) === k)); };
 const spkChip = i => `<button class="spk" data-sp="${i}" style="--c:${COLORS[spkColorId(i) % COLORS.length]}">${esc(spkName(i))}</button>`;
 const hasSpk = () => S.segs.some(s => s.speaker !== undefined);
+const hasPara = () => S.segs.some(s => s.para !== undefined);
 function blocks() {
-  const merge = $('merge').checked && hasSpk(), out = [];
+  const para = hasPara(), merge = $('merge').checked && (hasSpk() || para), out = [];
   S.segs.forEach((s, i) => {
     const last = out[out.length - 1];
     const same = last && (last.speaker === s.speaker || (s.speaker !== undefined && last.speaker !== undefined && spkKey(last.speaker) === spkKey(s.speaker)));
-    if (merge && same && s.start - last.end < 8 && last.ids.length < 12) { last.ids.push(i); last.end = s.end; }
+    if (merge && same && !s.para && s.start - last.end < 8 && last.ids.length < (para ? 25 : 12)) { last.ids.push(i); last.end = s.end; }
     else out.push({ids:[i], start:s.start, end:s.end, speaker:s.speaker});
   });
   return out;
 }
 const CJK = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/;
-const blockText = b => b.ids.map(i => S.segs[i].text).filter(Boolean).reduce((a, t) => !a ? t : a + (CJK.test(a.slice(-1)) || CJK.test(t[0]) ? '' : ' ') + t, '');
+const joinParts = parts => parts.filter(p => p.t).reduce((a, p) => !a.t ? {t:p.t, h:p.h} : {t:a.t + p.t, h:a.h + (CJK.test(a.t.slice(-1)) || CJK.test(p.t[0]) ? '' : ' ') + p.h}, {t:'', h:''});
+const blockText = b => joinParts(b.ids.map(i => ({t:S.segs[i].text, h:''}))).t;
+// 標出 AI 加入或修改的字（標點和空白不標，避免太花）
+const PUNCT = /[\s，。？！、：；「」『』,.?!:;"'（）()…—-]/;
+function diffHtml(a, b) {
+  if (!a || a.length * b.length > 90000) return esc(b);
+  const n = a.length, m = b.length, L = Array.from({length:n + 1}, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i+1][j+1] + 1 : Math.max(L[i+1][j], L[i][j+1]);
+  let i = 0, j = 0, out = '', run = '';
+  const flush = () => { if (run) { out += `<mark class="ai">${esc(run)}</mark>`; run = ''; } };
+  while (j < m) {
+    if (i < n && a[i] === b[j]) { flush(); out += esc(b[j]); i++; j++; }
+    else if (i < n && L[i+1][j] >= L[i][j+1]) i++;
+    else { if (PUNCT.test(b[j])) { flush(); out += esc(b[j]); } else run += b[j]; j++; }
+  }
+  flush(); return out;
+}
+const segHtml = i => { const s = S.segs[i]; return $('showAi').checked && s.orig !== undefined && s.orig !== s.text ? diffHtml(s.orig, s.text) : esc(s.text); };
+const blockHtml = b => joinParts(b.ids.map(i => ({t:S.segs[i].text, h:segHtml(i)}))).h;
 function rowHtml(b, k, prev, isNew) {
+  const changed = $('showAi').checked && b.ids.some(i => S.segs[i].orig !== undefined && S.segs[i].orig !== S.segs[i].text);
   const spk = b.speaker !== undefined && (!prev || prev.speaker === undefined || spkKey(prev.speaker) !== spkKey(b.speaker)) ? spkChip(b.speaker) : '';
   return `<div class="row${isNew?' new':''}${spk && k ? ' turn' : ''}" data-k="${k}" data-s="${b.start}" data-e="${b.end}" data-ids="${b.ids.join(',')}">
     <button class="ts num" data-t="${b.start}">${fmt(b.start)}</button>
-    <div class="body">${spk}<p class="tx" contenteditable="plaintext-only" spellcheck="false">${esc(blockText(b))}</p></div></div>`;
+    <div class="body">${spk}<p class="tx" contenteditable="plaintext-only" spellcheck="false">${blockHtml(b)}${changed ? `<button class="rv" contenteditable="false" title="還原成 AI 校對前的文字">還原</button>` : ''}</p></div></div>`;
 }
 const EMPTY = '<div class="empty"><b>逐字稿會在這裡一段段出現</b>轉錄時就能開始閱讀、點時間碼回聽、直接修改文字</div>';
 function renderAll(animateFrom) {
@@ -473,11 +512,15 @@ function renderAll(animateFrom) {
 paper.addEventListener('click', e => {
   const b = e.target.closest('.ts'); if (b) { au.currentTime = +b.dataset.t; au.play().catch(() => {}); tick(); return; }
   const sp = e.target.closest('.spk'); if (sp) rename(+sp.dataset.sp);
+  const rv = e.target.closest('.rv'); if (rv) { e.preventDefault();
+    rv.closest('.row').dataset.ids.split(',').map(Number).forEach(i => { const s = S.segs[i]; if (s.orig !== undefined) { s.text = s.orig; delete s.orig; } });
+    renderAll(); toast('已還原成校對前的文字'); }
 });
 // 編輯：一列只有一段時直接寫回；多段合併的列，把整列文字放進第一段、其他段清空
 paper.addEventListener('input', e => {
   const r = e.target.closest('.row'); if (!r) return;
-  const ids = r.dataset.ids.split(',').map(Number), t = e.target.textContent.trim();
+  const tx = e.target.closest('.tx'); if (!tx) return;
+  const ids = r.dataset.ids.split(',').map(Number), t = [...tx.childNodes].filter(n => !(n.classList && n.classList.contains('rv'))).map(n => n.textContent).join('').trim();
   ids.forEach((id, j) => S.segs[id].text = j ? '' : t);
   counts();
 });
@@ -498,11 +541,13 @@ function counts() {
   const segs = S.segs.filter(s => s.text), chars = segs.reduce((a, s) => a + s.text.replace(/\s/g, '').length, 0);
   const nsp = new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined).map(spkKey)).size;
   $('count').textContent = segs.length ? `${segs.length} 句 · ${chars.toLocaleString()} 字${nsp ? ` · ${nsp} 位講者` : ''}` : '';
-  ['copy','exTxt','exSrt'].forEach(id => $(id).disabled = !segs.length);
+  ['copy','proof','dl2'].forEach(id => $(id).disabled = !segs.length || S.status === 'run' || S.proof);
+  $('dl').hidden = !segs.length || S.status === 'run';
+  $('go').classList.toggle('ghost', !$('dl').hidden); $('go').classList.toggle('acc', $('dl').hidden);
 }
 function applySearch() {
   const q = $('q').value.trim().toLowerCase(); let n = 0;
-  paper.querySelectorAll('.row').forEach(r => { const hit = !q || r.querySelector('.tx').textContent.toLowerCase().includes(q); r.classList.toggle('dim', !hit); if (q && hit) n++; });
+  paper.querySelectorAll('.row').forEach(r => { const hit = !q || r.dataset.ids.split(',').some(i => S.segs[+i].text.toLowerCase().includes(q)); r.classList.toggle('dim', !hit); if (q && hit) n++; });
   if (q) $('count').textContent = `找到 ${n} 段符合「${$('q').value.trim()}」`; else counts();
 }
 $('q').addEventListener('input', applySearch);
@@ -534,7 +579,7 @@ $('go').addEventListener('click', async () => {
   if (!S.server) return disconnected();
   if (S.segs.length && !confirm('重新轉錄會取代目前的逐字稿，確定嗎？')) return;
   savePrefs(); S.segs = []; S.names = {}; S.rev = 0; S.job = null; renderAll();
-  S.status = 'run'; renderModels(); $('go').textContent = '停止'; $('diagBtn').hidden = true;
+  S.status = 'run'; renderModels(); $('go').textContent = '停止'; $('diagBtn').hidden = true; counts();
   const f = S.file;
   try {
     const uid = await uploadFile(f);
@@ -547,7 +592,7 @@ $('go').addEventListener('click', async () => {
   } catch (e) { if (S.file === f) finish('', e.message === '已取消' ? '已停止' : e.message, true); }
 });
 function finish(kind, msg, isErr) {
-  S.status = 'idle'; $('go').textContent = '重新轉錄'; renderModels();
+  S.status = 'idle'; $('go').textContent = '重新轉錄'; renderModels(); counts();
   setStatus(kind, msg, kind === 'ok' ? 1 : undefined); if (isErr) toast(msg);
   if (isErr) { S.lastError = msg; $('diagBtn').hidden = false; }
 }
@@ -589,13 +634,95 @@ const base = () => (S.file?.name || '逐字稿').replace(/\.[^.]+$/, '');
 function asText() {
   const ts = $('showTs').checked, bl = blocks().filter(b => blockText(b));
   return bl.map((b, k) => { const head = [ts ? `[${fmt(b.start, 'full')}]` : '', b.speaker !== undefined ? spkName(b.speaker) + '：' : ''].filter(Boolean).join(' ');
-    return (head ? head + (b.speaker !== undefined ? '' : ' ') : '') + blockText(b); }).join(hasSpk() ? '\n\n' : '\n');
+    return (head ? head + (b.speaker !== undefined ? '' : ' ') : '') + blockText(b); }).join(hasSpk() || hasPara() ? '\n\n' : '\n');
 }
 const asSrt = () => S.segs.filter(s => s.text).map((s, i) => `${i+1}\n${fmt(s.start,'srt')} --> ${fmt(s.end,'srt')}\n${s.speaker !== undefined ? spkName(s.speaker) + '：' : ''}${s.text}\n`).join('\n');
 function save(text, ext) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], {type:'text/plain;charset=utf-8'}));
   a.download = base() + ext; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('已下載 ' + a.download); }
-$('exTxt').addEventListener('click', () => save(asText(), '.txt'));
-$('exSrt').addEventListener('click', () => save(asSrt(), '.srt'));
+/* 下載選單 */
+function openMenu(btn) {
+  const m = $('dlMenu'), r = btn.getBoundingClientRect();
+  m.hidden = false; const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + 'px';
+  m.style.top = (r.bottom + h + 8 < innerHeight ? r.bottom + 6 : r.top - h - 6) + 'px';
+}
+['dl','dl2'].forEach(id => $(id).addEventListener('click', e => { e.stopPropagation(); $('dlMenu').hidden ? openMenu($(id)) : ($('dlMenu').hidden = true); }));
+document.addEventListener('click', e => { if (!e.target.closest('#dlMenu')) $('dlMenu').hidden = true; });
+addEventListener('scroll', () => $('dlMenu').hidden = true, {passive:true});
+$('dlMenu').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return; $('dlMenu').hidden = true;
+  if (b.dataset.f === 'txt') save(asText(), '_逐字稿.txt');
+  if (b.dataset.f === 'srt') save(asSrt(), '.srt');
+  if (b.dataset.f === 'docx') { try { await saveDocx(); } catch (err) { console.error(err); toast('Word 檔產生失敗，請改下載 TXT（' + err.message + '）'); } }
+});
+
+/* Word：需要時才載入 docx 套件 */
+let docxLib = null;
+const loadDocx = () => docxLib ? Promise.resolve(docxLib) : new Promise((ok, no) => {
+  const sc = document.createElement('script'); sc.src = window.__DOCX_URL || 'https://cdn.jsdelivr.net/npm/docx@9.15.3/dist/index.iife.js';
+  sc.onload = () => (docxLib = window.docx) ? ok(docxLib) : no(new Error('docx 未載入')); sc.onerror = () => no(new Error('無法下載 Word 元件，請確認網路'));
+  document.head.appendChild(sc); });
+async function saveDocx() {
+  toast('正在產生 Word 檔…');
+  const D = await loadDocx(), FONT = {ascii:'Calibri', eastAsia:'Microsoft JhengHei', hAnsi:'Calibri'};
+  const run = (text, o = {}) => new D.TextRun({text, font:FONT, size:o.size || 24, bold:o.bold, color:o.color});
+  const ts = $('showTs').checked, bl = blocks().filter(b => blockText(b));
+  const nsp = new Set(S.segs.map(x => x.speaker).filter(v => v !== undefined).map(spkKey)).size;
+  const meta = [`錄音長度 ${fmt(S.dur, 'full')}`, `${MODELS.find(m => m.key === S.model)?.name || ''} 轉錄`, nsp ? `${nsp} 位講者` : '',
+    S.segs.some(x => x.orig !== undefined || x.para !== undefined) ? '已 AI 校對' : '', `產生於 ${new Date().toLocaleDateString('zh-TW')}`].filter(Boolean).join('　·　');
+  const kids = [
+    new D.Paragraph({children:[run(base(), {size:36, bold:true})], spacing:{after:120}}),
+    new D.Paragraph({children:[run(meta, {size:20, color:'777777'})], spacing:{after:360}}),
+  ];
+  bl.forEach((b, k) => {
+    const prev = bl[k-1], newSpk = b.speaker !== undefined && (!prev || prev.speaker === undefined || spkKey(prev.speaker) !== spkKey(b.speaker));
+    const head = [];
+    if (newSpk) head.push(run(spkName(b.speaker) + (ts ? '　' : ''), {bold:true}));
+    if (ts && (newSpk || b.speaker === undefined || hasPara())) head.push(run(`[${fmt(b.start, 'full')}]`, {size:20, color:'888888'}));
+    if (head.length) kids.push(new D.Paragraph({children:head, spacing:{before:newSpk && k ? 240 : 120, after:40}, keepNext:true}));
+    kids.push(new D.Paragraph({children:[run(blockText(b))], spacing:{after:120, line:360}}));
+  });
+  const doc = new D.Document({creator:'逐字 Verbatim', title:base(), styles:{default:{document:{run:{font:FONT, size:24}}}},
+    sections:[{properties:{page:{margin:{top:1134, bottom:1134, left:1247, right:1247}}}, children:kids}]});
+  const blob = await D.Packer.toBlob(doc);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base() + '_逐字稿.docx';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('已下載 ' + a.download);
+}
+
+/* ---------- AI 校對 ---------- */
+$('proof').addEventListener('click', () => {
+  if (!S.server) return disconnected();
+  const chars = S.segs.reduce((a, x) => a + x.text.length, 0), min = Math.max(1, Math.round(chars / 1600));
+  $('pEst').innerHTML = `這份逐字稿約 ${chars.toLocaleString()} 字，預估需要 <b style="color:var(--ink)">${min} 分鐘</b>左右。第一次使用要先下載約 6 GB 的模型，會再多 2–3 分鐘。校對時可以繼續閱讀，但先不要修改文字。`;
+  $('pdlg').onclose = () => { if ($('pdlg').returnValue === 'ok') startProof(); };
+  $('pdlg').showModal();
+});
+const PSTAT = {queued:'校對排隊中…', installing:'安裝校對模組（第一次約 1 分鐘）…', downloading:'下載校對模型（約 5 GB，第一次約 2 分鐘）…', loading:'載入校對模型…'};
+async function startProof() {
+  const file = S.file, sent = S.segs.map(x => x.text);
+  S.proof = true; counts(); $('diagBtn').hidden = true;
+  setStatus('run', '準備 AI 校對…', 0);
+  try {
+    const r = await api('/api/proofread', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({segments: sent.map(text => ({text})), hint: $('hint').value, trad: $('trad').checked})});
+    while (true) {
+      await new Promise(ok => setTimeout(ok, 1500));
+      if (S.file !== file) return;
+      const j = await api('/api/proofread/' + r.id);
+      if (j.status === 'proofreading') setStatus('run', `AI 校對中 ${Math.round(j.done / j.total * 100)}%`, j.done / j.total);
+      else if (PSTAT[j.status]) setStatus('run', PSTAT[j.status], 0);
+      else if (j.status === 'error') throw new Error(j.error || '校對失敗');
+      else if (j.status === 'done') {
+        let n = 0;
+        j.result.forEach((x, i) => { const sg = S.segs[i]; if (!sg || sg.text !== sent[i]) return;  // 校對期間被手動改過的句子不覆蓋
+          sg.para = x.para; if (x.changed) { if (sg.orig === undefined) sg.orig = sg.text; sg.text = x.text; n++; } });
+        renderAll(); setStatus('ok', `AI 校對完成 · 修改了 ${n} 句`, 1); toast(`校對完成，修改了 ${n} 句（橘色標示），不滿意可以點「還原」`);
+        break;
+      }
+    }
+  } catch (e) { setStatus('', 'AI 校對失敗'); S.lastError = 'AI 校對：' + e.message; $('diagBtn').hidden = false; toast('AI 校對失敗：' + e.message); }
+  finally { S.proof = false; counts(); }
+}
 $('copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(asText()); }
   catch { const t = document.createElement('textarea'); t.value = asText(); document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }

@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.20-5"
+VERSION = "2026.11.20-6"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -62,6 +62,16 @@ _state = {"device": None, "gpu": None, "note": "", "ready": False}
 _errors = collections.deque(maxlen=5)
 _cc = None
 _emb = {"obj": None, "err": None}
+_llm = {"obj": None}
+_llm_lock = threading.Lock()
+
+
+def get_llm(status):
+    with _llm_lock:
+        if _llm["obj"] is None:
+            import proofread
+            _llm["obj"] = proofread.load(MODEL_DIR, device_info()["device"] == "cuda", status, _preload_cuda12)
+        return _llm["obj"]
 
 
 # ---------- 環境 ----------
@@ -295,11 +305,44 @@ def mock_run(job):  # 本機測試用
     job["progress"], job["status"] = 1.0, "done"
 
 
+def run_proof(jid):
+    job = jobs[jid]
+    try:
+        import proofread
+        if MOCK:
+            return mock_proof(job)
+        def st(x):
+            job["status"] = x
+        llm = get_llm(st)
+        job["status"] = "proofreading"
+        texts = [x["text"] for x in job["input"]]
+        def prog(done):
+            job["done"] = done
+        def post(t):
+            return fix_text(to_trad(t)) if job["trad"] else fix_text(t)
+        res = proofread.proofread(llm, texts, job["hint"], prog, lambda: job.get("cancel"), post)
+        job["result"] = [{"text": t, "para": p, "changed": c} for t, p, c in res]
+        job["status"] = "cancelled" if job.get("cancel") else "done"
+    except Exception as e:
+        log_error("AI 校對", e)
+        job["status"], job["error"] = "error", friendly(e) if "校對" not in str(e) else short(e)
+
+
+def mock_proof(job):
+    out = []
+    for i, x in enumerate(job["input"]):
+        time.sleep(0.15)
+        t = x["text"].replace("燈太暗", "燈光太暗").replace("騎很快", "騎得很快")
+        out.append({"text": t, "para": i % 3 == 0, "changed": t != x["text"]})
+        job["done"] = i + 1
+    job["result"], job["status"] = out, "done"
+
+
 def worker():
     while True:
         jid = work_q.get()
         if jid in jobs and not jobs[jid].get("cancel"):
-            run_job(jid)
+            (run_proof if jobs[jid].get("kind") == "proof" else run_job)(jid)
 
 
 threading.Thread(target=worker, daemon=True).start()
@@ -392,6 +435,28 @@ def job_status(jid: str, since: int = 0, rev: int = 0):
     full = job["rev"] != rev
     return {k: job[k] for k in ("id", "status", "progress", "duration", "language", "error", "warning", "rev")} | {
         "segments": job["segments"] if full else job["segments"][since:], "full": full, "ahead": ahead}
+
+
+@app.post("/api/proofread")
+def proofread_start(body: dict):
+    segs = body.get("segments") or []
+    if not segs or len(segs) > 20000:
+        raise HTTPException(400, "沒有可以校對的內容")
+    jid = uuid.uuid4().hex[:10]
+    jobs[jid] = {"id": jid, "kind": "proof", "input": [{"text": str(x.get("text", ""))[:2000]} for x in segs],
+                 "hint": str(body.get("hint", ""))[:400], "trad": bool(body.get("trad", True)), "status": "queued",
+                 "done": 0, "result": None, "error": None, "created": time.time()}
+    work_q.put(jid)
+    return {"id": jid}
+
+
+@app.get("/api/proofread/{jid}")
+def proofread_status(jid: str):
+    job = jobs.get(jid)
+    if not job or job.get("kind") != "proof":
+        raise HTTPException(404, "找不到這個校對工作（Colab 可能重新啟動過）")
+    return {"status": job["status"], "done": job["done"], "total": len(job["input"]), "error": job["error"],
+            "result": job["result"] if job["status"] == "done" else None}
 
 
 @app.post("/api/jobs/{jid}/cancel")

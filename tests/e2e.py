@@ -11,7 +11,10 @@ BASE = f"http://127.0.0.1:{PORT}"
 ENGINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "engine", "server.py")
 
 
-def call(path, fields=None, files=None):
+def call(path, fields=None, files=None, js=None):
+    if js is not None:
+        req = urllib.request.Request(BASE + path, data=json.dumps(js).encode(), headers={"Content-Type": "application/json"})
+        return json.load(urllib.request.urlopen(req, timeout=60))
     if fields is None and files is None:
         return json.load(urllib.request.urlopen(BASE + path, timeout=30))
     boundary = uuid.uuid4().hex
@@ -67,6 +70,19 @@ def main():
             "沒有「壹」": "壹" not in text,
             "講者人數": n_spk == len({t["speaker"] for t in truth}),
         }
+        if os.environ.get("VERBATIM_TEST_PROOF") == "1":  # AI 校對
+            pid = call("/api/proofread", js={"segments": [{"text": x["text"]} for x in segs], "hint": "工作坊、公園", "trad": True})["id"]
+            t0 = time.time()
+            while True:
+                p = call(f"/api/proofread/{pid}")
+                if p["status"] in ("done", "error", "cancelled") or time.time() - t0 > 1500:
+                    break
+                time.sleep(3)
+            print("proofread:", json.dumps(p, ensure_ascii=False, indent=1)[:3000])
+            res = p.get("result") or []
+            checks["校對完成"] = p["status"] == "done"
+            checks["校對沒有掉句"] = len(res) == len(segs) and all(r["text"] for r in res)
+            checks["校對後仍是繁體"] = not any(ch in "".join(r["text"] for r in res) for ch in "这们说长园议题")
         for k, ok in checks.items():
             print(("✅" if ok else "❌"), k)
         if not all(checks.values()):

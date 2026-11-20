@@ -27,6 +27,15 @@ jobs:
           uv venv -p 3.11 .venv
           uv pip install --python .venv -r engine/requirements.lock
 
+      - name: 安裝 AI 校對模組（CPU 版，從原始碼編譯同一版本 llama.cpp）
+        run: |
+          CMAKE_ARGS="-DGGML_NATIVE=OFF -DLLAMA_CURL=OFF" uv pip install --python .venv --no-binary llama-cpp-python llama-cpp-python==0.3.19 diskcache==5.6.3 jinja2==3.1.6 MarkupSafe==3.0.3
+
+      - name: 確認 Colab 用的 GPU 版下載連結仍然有效
+        run: |
+          URL=$(.venv/bin/python -c "import sys; sys.path.insert(0,'engine'); import proofread; print(proofread.LLM_WHEEL)")
+          curl -sfIL -o /dev/null "$URL" && echo "OK $URL"
+
       - name: 產生三人對話測試錄音
         run: |
           mkdir -p ci-log
@@ -35,6 +44,8 @@ jobs:
       - name: 端對端測試（上傳、轉錄、講者分辨）
         run: |
           set -o pipefail
+          VERBATIM_TEST_PROOF=1 VERBATIM_LLM_NO_INSTALL=1 \
+          VERBATIM_LLM_REPO=Qwen/Qwen3-0.6B-GGUF VERBATIM_LLM_FILE=Qwen3-0.6B-Q8_0.gguf \
           .venv/bin/python tests/e2e.py /tmp/t/dialog.mp3 /tmp/t/dialog_truth.json small 2>&1 | tee ci-log/e2e.txt
 
       - name: 保存測試紀錄到 ci-logs 分支（方便沒有登入也能查看）
