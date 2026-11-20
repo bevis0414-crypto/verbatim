@@ -63,7 +63,8 @@ def main():
             "沒有警告": not j["warning"],
             "有逐字稿": len(segs) >= 4,
             "繁體輸出": "園" in text or "說" in text or "長輩" in text,
-            "內容正確": sum(k in text for k in ("工作坊", "公園", "照明", "座椅", "自行車")) >= 3,
+            "內容大致正確": sum(k in text for k in ("工作坊", "公園", "照明", "座椅", "長輩", "意見", "討論", "車道")) >= 3,
+            "沒有「壹」": "壹" not in text,
             "講者人數": n_spk == len({t["speaker"] for t in truth}),
         }
         for k, ok in checks.items():

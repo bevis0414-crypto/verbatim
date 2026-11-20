@@ -7,7 +7,8 @@ import numpy as np
 EMB_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
            "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx")
 SR = 16000
-AUTO_THRESHOLD = 0.45   # 餘弦距離；小於這個值的兩群視為同一人（自動判斷人數時使用）
+AUTO_THRESHOLD = 0.40   # 餘弦距離；小於這個值的兩群視為同一人（自動判斷人數時使用）。
+# 寧可多分：多分出來的講者在網站上改成同一個名字就能合併；兩人被合成一人則無法事後拆開。
 MIN_SEC, MAX_SEC = 0.6, 10.0
 
 

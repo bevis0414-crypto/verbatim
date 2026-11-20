@@ -13,12 +13,12 @@ if not os.path.exists(d):
 tts = sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(
     vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=f"{d}/vits-aishell3.int8.onnx", lexicon=f"{d}/lexicon.txt", tokens=f"{d}/tokens.txt"),
     num_threads=2), rule_fsts=f"{d}/phone.fst,{d}/date.fst,{d}/number.fst"))
-lines = [(10, "大家好，今天的工作坊主要想聽聽各位對公園改善的想法。"),
-         (66, "我覺得高架橋下的燈太暗了，晚上走路會怕。"),
-         (10, "了解，那照明是第一個議題。還有其他意見嗎？"),
-         (120, "很多長輩希望多一點有遮蔭的座椅，可以坐下來休息。"),
-         (66, "另外自行車騎得很快，最好把步道和車道分開。"),
-         (10, "好，我們把這些意見記下來，下一輪再討論配置。")]
+lines = [(0, "大家好，今天的工作坊主要想聽聽各位對公園改善的想法。"),
+         (7, "我覺得高架橋下的燈太暗了，晚上走路會怕。"),
+         (0, "了解，那照明是第一個議題。還有其他意見嗎？"),
+         (119, "很多長輩希望多一點有遮蔭的座椅，可以坐下來休息。"),
+         (7, "另外自行車騎得很快，最好把步道和車道分開。"),
+         (0, "好，我們把這些意見記下來，下一輪再討論配置。")]
 out, truth, t, sr = [], [], 0.0, None
 for sid, text in lines:
     a = tts.generate(text, sid=sid, speed=1.0); sr = a.sample_rate

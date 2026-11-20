@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.20-4"
+VERSION = "2026.11.20-5"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -153,6 +153,18 @@ def load_audio(path, sr=16000):
     return np.frombuffer(r.stdout, np.int16).astype(np.float32) / 32768.0
 
 
+_YI = None
+
+
+def fix_text(text):
+    """Whisper 繁體輸出偶爾把「一」寫成「壹」；金額寫法（壹佰、壹萬元…）保留"""
+    global _YI
+    if _YI is None:
+        import re
+        _YI = re.compile(r"壹(?![拾佰仟萬億圓元角])")
+    return _YI.sub("一", text)
+
+
 def to_trad(text):
     global _cc
     if _cc is None:
@@ -229,6 +241,8 @@ def run_job(jid):
             text = s.text.strip()
             if trad:
                 text = to_trad(text)
+            if info.language == "zh":
+                text = fix_text(text)
             if text:
                 seg = {"start": round(s.start, 2), "end": round(s.end, 2), "text": text}
                 job["segments"].append(seg)
