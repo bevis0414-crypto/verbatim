@@ -3,6 +3,7 @@ import sherpa_onnx, numpy as np, wave, json, sys, os, subprocess, tarfile, urlli
 import imageio_ffmpeg
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
+os.makedirs(OUT, exist_ok=True)
 d = os.path.join(OUT, "vits-zh-aishell3")
 if not os.path.exists(d):
     tgz = os.path.join(OUT, "tts.tar.bz2")
