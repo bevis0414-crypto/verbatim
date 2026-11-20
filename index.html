@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>逐字 Verbatim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE   安靜、專注的夜間錄音室
+   IDEA    錄音卡座：真實波形是主角，轉錄進度讓波形由暗轉亮
+   PICTURE 音檔波形＋橘色播放頭；講者用色塊標記
+   COLOUR  全暗：墨黑 #0d0e11、面板 #16181c、訊號橘 #ff5a1f
+   TYPE    Noto Sans TC 內文；Space Grotesk 數字與時間碼 */
+:root{color-scheme:dark;--bg:#0d0e11;--p1:#15171b;--p2:#1c1f24;--p3:#262a30;--line:#2a2d34;
+  --ink:#eceae4;--mute:#8b9098;--acc:#ff5a1f;--accSoft:#ff5a1f1c;--ok:#35b26c}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Noto Sans TC",system-ui,sans-serif;overflow-x:clip}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.num{font-family:"Space Grotesk","Noto Sans TC",sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto}
+
+.deck{padding:18px max(4vw,16px) 26px;background:linear-gradient(#121418,var(--bg));border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.brand{font-weight:700;font-size:20px;letter-spacing:.04em;display:flex;align-items:center;gap:10px}
+.brand i{width:12px;height:12px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 4px #ff5a1f33}
+.chip{margin-left:auto;font-size:13px;color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:4px 12px;white-space:nowrap;display:flex;align-items:center;gap:8px;background:none}
+.chip b{color:var(--ink);font-weight:500}
+.btn{border:0;border-radius:12px;min-height:46px;padding:0 22px;font-weight:500;display:inline-flex;align-items:center;gap:8px;justify-content:center;white-space:nowrap;text-decoration:none}
+.btn.acc{background:var(--acc);color:#fff}.btn.acc:hover{filter:brightness(1.08)}
+.btn.ghost{background:var(--p3)}.btn.ghost:hover{background:#30343b}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
+.dot.run{background:var(--acc);animation:pulse 1.2s infinite}.dot.ok{background:var(--ok)}
+@keyframes pulse{50%{opacity:.3}}
+
+/* 連線面板 */
+body .view{display:none}
+body[data-v=connect] .v-connect,body[data-v=file] .v-file{display:block}body[data-v=drop] .v-drop{display:grid}
+.connect{border:1px solid var(--line);border-radius:18px;background:var(--p1);padding:clamp(22px,4vw,40px)}
+.connect h1{font-size:clamp(28px,4vw,42px);line-height:1.1;margin:0 0 8px;text-wrap:balance}
+.connect>p{color:var(--mute);margin:0 0 26px;max-width:62ch}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:26px;counter-reset:s}
+.step{background:var(--p2);border-radius:14px;padding:18px;border:1px solid transparent}
+.step.now{border-color:var(--acc)}
+.step b{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.step b::before{counter-increment:s;content:counter(s);width:26px;height:26px;border-radius:50%;background:var(--p3);display:grid;place-items:center;font:600 14px "Space Grotesk",sans-serif;flex:none}
+.step.now b::before{background:var(--acc);color:#fff}
+.step span{color:var(--mute);font-size:14px}
+.cRow{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px}
+.waiting{display:none;align-items:center;gap:10px;color:var(--mute);font-size:14px}
+.waiting.show{display:flex}
+details.manual{margin-top:22px;color:var(--mute);font-size:14px}
+details.manual summary{cursor:pointer;min-height:32px}
+.mRow{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+.mRow input{flex:1 1 280px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--p2);padding:0 12px;font-size:16px}
+
+.drop{display:grid;place-items:center;text-align:center;min-height:300px;border:1.5px dashed #363a42;border-radius:18px;cursor:pointer;
+  background:repeating-linear-gradient(90deg,transparent 0 7px,#ffffff05 7px 9px);transition:.2s;padding:28px}
+.drop:hover,.drop.over{border-color:var(--acc);background-color:#ff5a1f0d}
+.drop h1{font-size:clamp(28px,4vw,44px);line-height:1.1;margin:14px 0 8px;text-wrap:balance}
+.drop p{color:var(--mute);margin:0 0 22px}
+.drop svg{width:min(420px,80%);height:auto}
+
+.fileRow{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin-bottom:14px}
+.fname{font-size:clamp(20px,2.4vw,28px);font-weight:700;line-height:1.2;overflow-wrap:anywhere;flex:1 1 300px}
+.fmeta{color:var(--mute);font-size:14px}
+.wave{position:relative;height:170px;border-radius:14px;background:var(--p1);border:1px solid var(--line);overflow:hidden;cursor:pointer}
+.wave canvas{position:absolute;inset:0;width:100%;height:100%}
+.ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:14px}
+.play{width:52px;height:52px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);display:grid;place-items:center;flex:none}
+.play svg{width:20px;height:20px}
+.time{font-size:18px}.time span{color:var(--mute)}
+.speed{background:var(--p3);border:0;border-radius:10px;height:40px;padding:0 10px}
+.status{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:14px;color:var(--mute)}
+.bar{width:180px;height:6px;border-radius:9px;background:var(--p3);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+
+/* 稿紙 */
+.sheet{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:28px;padding:28px max(4vw,16px) 64px}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.search{flex:1 1 220px;position:relative}
+.search input{width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--p1);padding:0 14px 0 38px;font-size:16px}
+.search svg{position:absolute;left:12px;top:13px;width:18px;height:18px;color:var(--mute)}
+.tb{height:44px;border-radius:12px;border:1px solid var(--line);background:var(--p1);padding:0 14px;font-size:14px;white-space:nowrap}
+.tb:hover:not(:disabled){border-color:var(--mute)}.tb:disabled{opacity:.4;cursor:not-allowed}
+.paper{background:var(--p1);border:1px solid var(--line);border-radius:16px;min-height:360px;padding:10px 0}
+.empty{padding:70px 24px;text-align:center;color:var(--mute)}
+.empty b{display:block;color:var(--ink);font-size:20px;margin-bottom:6px}
+.row{display:grid;grid-template-columns:76px minmax(0,1fr);gap:6px;padding:8px 22px 8px 12px;border-left:3px solid transparent;transition:background .15s}
+.no-ts .row{grid-template-columns:minmax(0,1fr);padding-left:22px}.no-ts .ts{display:none}
+.row:hover{background:var(--p2)}
+.row.on{background:var(--accSoft);border-left-color:var(--acc)}
+.row.dim{opacity:.25}
+.row.new{animation:rise .35s ease-out}
+.row.turn{margin-top:8px}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+.ts{border:0;background:none;color:var(--mute);font-size:14px;text-align:left;padding:3px 6px;border-radius:6px;height:fit-content;white-space:nowrap}
+.ts:hover{color:var(--acc)}
+.body{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.spk{border:0;border-radius:99px;font-size:13px;font-weight:500;padding:1px 10px;background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);margin:3px 0 0 6px}
+.spk:hover{background:color-mix(in srgb,var(--c) 34%,transparent)}
+.tx{margin:0;padding:2px 6px;border-radius:6px;outline:none;font-size:17px;line-height:1.75;align-self:stretch}
+.tx:focus{background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:var(--mute);font-size:13px;margin-top:10px}
+
+aside{display:flex;flex-direction:column;gap:18px;align-self:start;position:sticky;top:18px}
+.card{background:var(--p1);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h2{font-size:15px;margin:0 0 14px}
+.models{display:grid;gap:8px}
+.mdl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;text-align:left;border:1px solid var(--line);background:var(--p2);border-radius:12px;padding:11px 14px}
+.mdl:hover:not(:disabled){border-color:#3d424b}
+.mdl.on{border-color:var(--acc);background:var(--accSoft)}
+.mdl:disabled{opacity:.45;cursor:not-allowed}
+.mdl b{font-size:16px;font-weight:500}
+.mdl .tag{font-size:12px;color:var(--mute);align-self:center;white-space:nowrap}
+.mdl .tag.ok{color:var(--ok)}
+.mdl p{grid-column:1/-1;margin:0;font-size:13px;color:var(--mute);line-height:1.5}
+.meters{grid-column:1/-1;display:flex;gap:16px;margin-top:5px;font-size:12px;color:var(--mute)}
+.meters span{display:flex;align-items:center;gap:6px}
+.pips{display:flex;gap:3px}.pips i{width:12px;height:4px;border-radius:2px;background:var(--p3)}.pips i.f{background:var(--ink)}
+label.f{display:block;font-size:14px;color:var(--mute);margin:0 0 6px}
+.field{margin-bottom:16px}
+select.in,textarea.in{width:100%;border:1px solid var(--line);background:var(--p2);border-radius:10px;font-size:16px}
+select.in{height:44px;padding:0 10px}
+textarea.in{min-height:76px;padding:10px;resize:vertical;line-height:1.5}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:15px;min-height:44px}
+.sw input{appearance:none;width:44px;height:26px;border-radius:99px;background:var(--p3);position:relative;cursor:pointer;flex:none;transition:.2s;margin:0}
+.sw input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+.sw input:checked{background:var(--acc)}.sw input:checked::after{left:21px}
+.note{font-size:13px;color:var(--mute);margin:6px 0 0;line-height:1.55}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.legend:empty{display:none}
+.legend .spk{margin:0}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--p3);border:1px solid var(--line);padding:12px 18px;border-radius:12px;opacity:0;transition:.25s;pointer-events:none;z-index:9;max-width:90vw}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+dialog{background:var(--p1);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:22px;width:min(380px,90vw)}
+dialog::backdrop{background:#000a}
+dialog h3{margin:0 0 12px;font-size:17px}
+dialog input{width:100%;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--p2);padding:0 12px;font-size:16px}
+dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+
+@media(max-width:900px){.sheet{grid-template-columns:minmax(0,1fr)}aside{position:static;order:-1}}
+@media(max-width:700px){.steps{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.wave{height:120px}.status{margin-left:0;width:100%}.bar{flex:1}.row{grid-template-columns:62px minmax(0,1fr);padding-right:12px}.tx{font-size:16px}.chip span.long{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-v="connect">
+<header class="deck" id="deck">
+ <div class="wrap">
+  <div class="top">
+    <div class="brand"><i></i>逐字</div>
+    <button class="chip" id="chip" title="連線狀態"><span class="dot" id="cdot"></span><span id="ctxt">未連線</span></button>
+  </div>
+
+  <section class="view v-connect">
+    <div class="connect">
+      <h1>先啟動雲端轉錄引擎</h1>
+      <p>轉錄在 Google Colab 的免費 GPU 上執行，你的電腦不用很強。每次開始使用時啟動一次，大約 2 分鐘。</p>
+      <div class="steps">
+        <div class="step now" id="st1"><b>開啟 Colab</b><span>點下方按鈕，會在新分頁打開筆記本。</span></div>
+        <div class="step" id="st2"><b>按「全部執行」</b><span>按 Ctrl+F9（Mac 是 ⌘+F9）。如果跳出警告，選「仍要執行」。</span></div>
+        <div class="step" id="st3"><b>回到這裡</b><span>Colab 出現橘色按鈕後點它，這頁會自動連上。</span></div>
+      </div>
+      <div class="cRow">
+        <a class="btn acc" id="openColab" href="#" target="_blank" rel="noopener">啟動 Colab ↗</a>
+        <div class="waiting" id="waiting"><span class="dot run"></span>等待 Colab 啟動中…請保持 Colab 分頁開著</div>
+      </div>
+      <details class="manual">
+        <summary>已經有連線網址？</summary>
+        <div class="mRow"><input id="manualUrl" placeholder="https://xxxx.trycloudflare.com" aria-label="連線網址"><button class="btn ghost" id="manualGo">連線</button></div>
+      </details>
+    </div>
+  </section>
+
+  <label class="drop view v-drop" id="drop">
+    <div>
+      <svg viewBox="0 0 420 90" aria-hidden="true" id="deco"></svg>
+      <h1>把錄音檔拖進來</h1>
+      <p>mp3、m4a、wav、mp4、mov 都可以，檔案大小不限</p>
+      <span class="btn acc">選擇檔案</span>
+      <input type="file" id="file" accept="audio/*,video/*" hidden>
+    </div>
+  </label>
+
+  <section class="view v-file">
+    <div class="fileRow">
+      <div class="fname" id="fname">—</div>
+      <div class="fmeta num" id="fmeta"></div>
+      <button class="btn ghost" id="change">換檔案</button>
+      <button class="btn acc" id="go">開始轉錄</button>
+    </div>
+    <div class="wave" id="wave"><canvas id="cv"></canvas></div>
+    <div class="ctrl">
+      <button class="play" id="play" aria-label="播放"><svg viewBox="0 0 24 24" id="playIco"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></svg></button>
+      <div class="time num" id="time">00:00 <span>/ 00:00</span></div>
+      <select class="speed" id="speed" aria-label="播放速度"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+      <div class="status"><span class="dot" id="dot"></span><span id="stxt">準備好了</span><div class="bar"><i id="barI"></i></div></div>
+    </div>
+  </section>
+ </div>
+</header>
+
+<main class="sheet wrap">
+  <section>
+    <div class="tools">
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="搜尋逐字稿" aria-label="搜尋逐字稿"></div>
+      <button class="tb" id="copy" disabled>複製全文</button>
+      <button class="tb" id="exTxt" disabled>下載 TXT</button>
+      <button class="tb" id="exSrt" disabled>下載 SRT 字幕</button>
+    </div>
+    <div class="paper" id="paper"></div>
+    <div class="foot"><span id="count"></span><label class="sw" style="min-height:0;gap:8px">播放時自動捲動<input type="checkbox" id="follow" checked style="transform:scale(.8)"></label></div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>轉錄模型</h2>
+      <div class="models" id="models"></div>
+    </div>
+    <div class="card">
+      <h2>轉錄設定</h2>
+      <div class="field">
+        <label class="f" for="lang">語言</label>
+        <select class="in" id="lang">
+          <option value="zh">中文</option><option value="">自動偵測</option><option value="en">英文</option>
+          <option value="ja">日文</option><option value="ko">韓文</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="f" for="spk">區分講者</label>
+        <select class="in" id="spk">
+          <option value="off">不區分</option><option value="auto">自動判斷人數</option>
+          <option value="2">2 位講者</option><option value="3">3 位講者</option><option value="4">4 位講者</option><option value="5">5 位講者</option><option value="6">6 位講者</option>
+        </select>
+        <p class="note">知道有幾個人說話時，直接指定人數會更準。</p>
+      </div>
+      <label class="sw field">輸出繁體中文（臺灣用語）<input type="checkbox" id="trad" checked></label>
+      <div class="field" style="margin:0">
+        <label class="f" for="hint">專有名詞提示</label>
+        <textarea class="in" id="hint" placeholder="例如：降版區、pump track、士林前街"></textarea>
+        <p class="note">寫下會出現的人名、地名或術語，辨識會更準。</p>
+      </div>
+    </div>
+    <div class="card">
+      <h2>顯示與匯出</h2>
+      <label class="sw">標註時間戳記<input type="checkbox" id="showTs" checked></label>
+      <label class="sw">同一講者的連續句子合併成段落<input type="checkbox" id="merge" checked></label>
+      <p class="note">這兩項會套用到畫面、複製和 TXT。點講者標籤可以改名，例如「里長」。</p>
+      <div class="legend" id="legend"></div>
+    </div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+<dialog id="dlg"><form method="dialog" id="dlgForm"><h3 id="dlgT">講者改名</h3><input id="dlgIn" autocomplete="off"><div class="dRow"><button class="btn ghost" value="cancel" formnovalidate>取消</button><button class="btn acc" value="ok">確定</button></div></form></dialog>
+<audio id="au" preload="metadata"></audio>
+
+<script>
+{
+/* ---------- 設定：網站放在 GitHub Pages 時會自動算出 Colab 筆記本的位置 ---------- */
+const REPO = (() => {
+  const h = location.hostname.match(/^([^.]+)\.github\.io$/);
+  if (h) return {owner: h[1], name: location.pathname.split('/').filter(Boolean)[0] || h[1] + '.github.io'};
+  return {owner: 'bevis0414-crypto', name: 'verbatim'};
+})();
+const COLAB = `https://colab.research.google.com/github/${REPO.owner}/${REPO.name}/blob/main/verbatim_colab.ipynb`;
+
+const $ = id => document.getElementById(id);
+const au = $('au'), cv = $('cv'), paper = $('paper');
+const MODELS = [
+  {key:'large-v2', name:'Large v2', desc:'你習慣的版本，中文穩定、不太亂加字。', acc:4, spd:2},
+  {key:'large-v3', name:'Large v3', desc:'最新版，整體最準，偶爾會重複句子。', acc:4, spd:2},
+  {key:'turbo', name:'Large v3 Turbo', desc:'比 Large 快約 3 倍，準確度接近。', acc:3, spd:4},
+  {key:'medium', name:'Medium', desc:'中型，速度和準確度折衷。', acc:3, spd:3},
+  {key:'small', name:'Small', desc:'最快，適合先試聽大概內容。', acc:2, spd:4},
+];
+const LANGS = {zh:'中文', en:'英文', ja:'日文', ko:'韓文'};
+const COLORS = ['#6ea8fe','#f7c948','#5fd3a6','#e88bd8','#a3a8ff','#ff9b6a','#7fd1e8','#c3e66e'];
+const S = {server:null, sys:null, file:null, peaks:null, dur:0, job:null, rev:0, segs:[], names:{}, status:'idle',
+  progress:0, onIdx:-1, timer:null, model:'large-v2'};
+
+const fmt = (t, mode) => { t = Math.max(0, t||0); const h = Math.floor(t/3600), m = Math.floor(t%3600/60), s = Math.floor(t%60), p = n => String(n).padStart(2,'0');
+  if (mode === 'srt') return `${p(h)}:${p(m)}:${p(s)},${String(Math.floor((t%1)*1000)).padStart(3,'0')}`;
+  if (mode === 'full') return `${p(h)}:${p(m)}:${p(s)}`;
+  return (h ? p(h)+':' : '') + p(m) + ':' + p(s); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mb = b => b > 1e9 ? (b/1e9).toFixed(2)+' GB' : (b/1048576).toFixed(1)+' MB';
+let tt; const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 3000); };
+const view = v => document.body.dataset.v = v;
+const store = { get(k, d) { try { const v = localStorage.getItem('verbatim:' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('verbatim:' + k, JSON.stringify(v)); } catch {} } };
+
+$('deco').innerHTML = Array.from({length:70}, (_, i) => { const a = 6 + Math.abs(Math.sin(i*.37)*Math.cos(i*.11))*36 + (i%7===0?8:0), hot = i>44&&i<50;
+  return `<rect x="${i*6}" y="${45-a}" width="3" height="${a*2}" rx="1.5" fill="${hot?'#ff5a1f':'#eceae4'}" opacity="${hot?1:.3}"/>`; }).join('');
+
+/* ---------- 偏好 ---------- */
+const P = store.get('prefs', {});
+if (MODELS.some(m => m.key === P.model)) S.model = P.model;
+for (const [id, k] of [['lang','lang'],['spk','spk'],['hint','hint']]) if (P[k] !== undefined) $(id).value = P[k];
+for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge']]) if (P[k] !== undefined) $(id).checked = P[k];
+const savePrefs = () => store.set('prefs', {model:S.model, lang:$('lang').value, spk:$('spk').value, hint:$('hint').value,
+  trad:$('trad').checked, showTs:$('showTs').checked, merge:$('merge').checked});
+['lang','spk','hint','trad'].forEach(id => $(id).addEventListener('change', savePrefs));
+['showTs','merge'].forEach(id => $(id).addEventListener('change', () => { savePrefs(); renderAll(); }));
+
+const pips = n => `<span class="pips">${[1,2,3,4].map(i => `<i class="${i<=n?'f':''}"></i>`).join('')}</span>`;
+function renderModels() {
+  const busy = S.status === 'run';
+  $('models').innerHTML = MODELS.map(m => `<button class="mdl${S.model===m.key?' on':''}" data-k="${m.key}" ${busy?'disabled':''}>
+    <b>${m.name}</b>${S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : ''}<p>${m.desc}</p>
+    <span class="meters"><span>準確度 ${pips(m.acc)}</span><span>速度 ${pips(m.spd)}</span></span></button>`).join('');
+}
+$('models').addEventListener('click', e => { const b = e.target.closest('.mdl'); if (!b || b.disabled) return; S.model = b.dataset.k; savePrefs(); renderModels(); });
+
+/* ---------- 連線 ---------- */
+$('openColab').href = COLAB;
+$('openColab').addEventListener('click', () => { $('waiting').classList.add('show'); $('st1').classList.remove('now'); $('st2').classList.add('now'); });
+const api = (path, opt) => fetch(S.server + path, opt).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status)); return r.json(); });
+function cleanUrl(u) { u = (u || '').trim().replace(/\/+$/, ''); return /^(https:\/\/[\w.-]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(u) ? u : null; }
+async function connect(url, quiet) {
+  url = cleanUrl(url); if (!url) { if (!quiet) toast('網址格式不對，應該像 https://xxxx.trycloudflare.com'); return false; }
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 8000);
+    const s = await (await fetch(url + '/api/system', {signal: ctl.signal})).json();
+    if (s.app !== 'verbatim') throw 0;
+    S.server = url; S.sys = s; store.set('server', url);
+    setChip(true); renderModels();
+    if (document.body.dataset.v === 'connect') view(S.file ? 'file' : 'drop');
+    if (s.note) toast(s.note);
+    return true;
+  } catch { if (!quiet) toast('連不上，Colab 可能還在啟動或已經關閉'); return false; }
+}
+function setChip(on) {
+  $('cdot').className = 'dot ' + (on ? 'ok' : '');
+  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>` : '未連線';
+}
+function disconnected() {
+  if (!S.server) return;
+  S.server = null; setChip(false);
+  if (S.status !== 'run') { view('connect'); $('waiting').classList.remove('show'); ['st1','st2','st3'].forEach((id, i) => $(id).classList.toggle('now', i === 0)); }
+  toast('和 Colab 的連線斷了，請重新啟動 Colab');
+}
+$('chip').addEventListener('click', () => { if (!S.server) return; if (confirm('要中斷連線，改用新的 Colab 嗎？')) { store.set('server', null); disconnected(); } });
+$('manualGo').addEventListener('click', () => connect($('manualUrl').value));
+$('manualUrl').addEventListener('keydown', e => { if (e.key === 'Enter') connect(e.target.value); });
+// Colab 的「回到逐字網站」按鈕會帶著 #server=… 打開這頁；舊分頁透過 storage 事件同步連上
+addEventListener('storage', e => { if (e.key === 'verbatim:server' && e.newValue && !S.server) connect(JSON.parse(e.newValue), true); });
+setInterval(async () => {
+  if (S.server) { try { S.sys = await api('/api/system'); setChip(true); renderModels(); } catch { disconnected(); } }
+  else if (document.body.dataset.v === 'connect' && $('waiting').classList.contains('show')) { const u = store.get('server'); if (u) connect(u, true); }
+}, 15000);
+async function fromHash() {
+  const m = location.hash.match(/server=([^&]+)/); if (!m) return false;
+  history.replaceState(null, '', location.pathname);
+  if (await connect(decodeURIComponent(m[1]))) { toast('已連上 Colab'); return true; }
+  return false;
+}
+addEventListener('hashchange', fromHash);
+(async () => { if (await fromHash()) return; const saved = store.get('server'); if (saved) connect(saved, true); })();
+renderModels();
+
+/* ---------- 選檔 ---------- */
+const drop = $('drop');
+['dragenter','dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (S.server) drop.classList.add('over'); }));
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('over'); });
+document.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f && S.server) pickFile(f); });
+$('file').addEventListener('change', e => { if (e.target.files[0]) pickFile(e.target.files[0]); e.target.value = ''; });
+$('change').addEventListener('click', () => $('file').click());
+function pickFile(f) {
+  if (!/^(audio|video)\//.test(f.type) && !/\.(mp3|m4a|wav|aac|flac|ogg|opus|wma|mp4|mov|mkv|webm|amr|3gp)$/i.test(f.name)) return toast('這個檔案看起來不是音訊或影片');
+  if (S.status === 'run' && !confirm('目前的轉錄會停止，確定要換檔案嗎？')) return;
+  if (S.status !== 'run' && S.segs.length && !confirm('換檔案後目前的逐字稿會清除，確定嗎？')) return;
+  if (S.status === 'run' && S.job) api(`/api/jobs/${S.job}/cancel`, {method:'POST'}).catch(() => {});
+  clearTimeout(S.timer);
+  Object.assign(S, {file:f, peaks:null, dur:0, job:null, rev:0, segs:[], names:{}, status:'idle', progress:0, onIdx:-1});
+  if (au.src) URL.revokeObjectURL(au.src);
+  au.src = URL.createObjectURL(f);
+  view(S.server ? 'file' : 'connect'); $('fname').textContent = f.name; $('fmeta').textContent = mb(f.size);
+  $('go').disabled = false; $('go').textContent = '開始轉錄';
+  setStatus('', '準備好了', 0); renderAll(); renderModels(); draw(); computePeaks(f);
+}
+au.addEventListener('loadedmetadata', () => { if (isFinite(au.duration)) { S.dur = au.duration; $('fmeta').textContent = `${fmt(S.dur)} · ${mb(S.file.size)}`; tick(); } });
+async function computePeaks(f) {
+  if (f.size > 300 * 1048576) return;
+  try {
+    const ctx = new AudioContext({sampleRate: 8000});
+    const buf = await ctx.decodeAudioData(await f.arrayBuffer()); ctx.close();
+    if (S.file !== f) return;
+    const N = 2400, d = buf.getChannelData(0), step = Math.max(1, Math.floor(d.length / N)), p = new Float32Array(N); let mx = 0;
+    for (let i = 0; i < N; i++) { let m = 0; for (let j = i*step, e = Math.min(d.length, j+step); j < e; j += 2) { const v = Math.abs(d[j]); if (v > m) m = v; } p[i] = m; if (m > mx) mx = m; }
+    for (let i = 0; i < N; i++) p[i] = Math.pow(p[i] / (mx || 1), .7);
+    S.peaks = p; if (!S.dur) S.dur = buf.duration; draw();
+  } catch {}
+}
+
+/* ---------- 波形與播放 ---------- */
+function draw() {
+  const W = cv.clientWidth, H = cv.clientHeight, r = devicePixelRatio || 1; if (!W) return;
+  if (cv.width !== Math.round(W*r)) { cv.width = Math.round(W*r); cv.height = Math.round(H*r); }
+  const c = cv.getContext('2d'); c.setTransform(r,0,0,r,0,0); c.clearRect(0,0,W,H);
+  const n = Math.floor(W/4), done = S.progress * W, mid = H/2;
+  for (let i = 0; i < n; i++) {
+    const x = i*4 + 1, a = S.peaks ? Math.max(.03, S.peaks[Math.floor(i / n * S.peaks.length)]) : .04, h = Math.max(2, a * H * .82);
+    c.fillStyle = x < done ? 'rgba(236,234,228,.95)' : 'rgba(236,234,228,.2)'; c.fillRect(x, mid - h/2, 2, h);
+  }
+  if (S.dur) { const px = au.currentTime / S.dur * W; c.fillStyle = '#ff5a1f'; c.fillRect(px-1, 0, 2, H); c.beginPath(); c.arc(px, 6, 5, 0, 7); c.fill(); }
+}
+new ResizeObserver(draw).observe(cv);
+$('wave').addEventListener('click', e => { if (!S.dur) return; const b = cv.getBoundingClientRect(); au.currentTime = (e.clientX - b.left) / b.width * S.dur; tick(); });
+const setIco = p => $('playIco').innerHTML = p ? '<path fill="currentColor" d="M6 4h4v16H6zm8 0h4v16h-4z"/>' : '<path fill="currentColor" d="M7 4.5v15l13-7.5z"/>';
+const toggle = () => { if (!au.src) return; au.paused ? au.play().catch(() => toast('無法播放這個檔案')) : au.pause(); };
+$('play').addEventListener('click', toggle);
+au.addEventListener('play', () => { setIco(1); loop(); }); au.addEventListener('pause', () => setIco(0));
+$('speed').addEventListener('change', e => au.playbackRate = +e.target.value);
+function loop() { tick(); if (!au.paused) requestAnimationFrame(loop); }
+function tick() {
+  $('time').innerHTML = `${fmt(au.currentTime)} <span>/ ${fmt(S.dur)}</span>`; draw();
+  const t = au.currentTime; let idx = -1;
+  const rows = paper.querySelectorAll('.row');
+  for (const r of rows) { if (+r.dataset.s <= t + .05) idx = +r.dataset.k; else break; }
+  if (idx !== -1 && t > +rows[idx]?.dataset.e + 1.5) idx = -1;
+  if (idx !== S.onIdx) {
+    paper.querySelector('.row.on')?.classList.remove('on');
+    const row = rows[idx];
+    if (row) { row.classList.add('on'); if ($('follow').checked && !au.paused && !paper.contains(document.activeElement)) row.scrollIntoView({block:'center', behavior:'smooth'}); }
+    S.onIdx = idx;
+  }
+}
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,select,[contenteditable],dialog')) return;
+  if (e.code === 'Space' && au.src) { e.preventDefault(); toggle(); }
+  if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { au.currentTime += e.code === 'ArrowLeft' ? -5 : 5; tick(); }
+});
+
+/* ---------- 逐字稿：畫面上的一列可能是好幾段合併而成 ---------- */
+const spkName = i => S.names[i] || `講者 ${i + 1}`;
+const hasSpk = () => S.segs.some(s => s.speaker !== undefined);
+function blocks() {
+  const merge = $('merge').checked && hasSpk(), out = [];
+  S.segs.forEach((s, i) => {
+    const last = out[out.length - 1];
+    if (merge && last && last.speaker === s.speaker && s.start - last.end < 8 && last.ids.length < 12) { last.ids.push(i); last.end = s.end; }
+    else out.push({ids:[i], start:s.start, end:s.end, speaker:s.speaker});
+  });
+  return out;
+}
+const CJK = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/;
+const blockText = b => b.ids.map(i => S.segs[i].text).filter(Boolean).reduce((a, t) => !a ? t : a + (CJK.test(a.slice(-1)) || CJK.test(t[0]) ? '' : ' ') + t, '');
+function rowHtml(b, k, prev, isNew) {
+  const spk = b.speaker !== undefined && (!prev || prev.speaker !== b.speaker)
+    ? `<button class="spk" data-sp="${b.speaker}" style="--c:${COLORS[b.speaker % COLORS.length]}">${esc(spkName(b.speaker))}</button>` : '';
+  return `<div class="row${isNew?' new':''}${spk && k ? ' turn' : ''}" data-k="${k}" data-s="${b.start}" data-e="${b.end}" data-ids="${b.ids.join(',')}">
+    <button class="ts num" data-t="${b.start}">${fmt(b.start)}</button>
+    <div class="body">${spk}<p class="tx" contenteditable="plaintext-only" spellcheck="false">${esc(blockText(b))}</p></div></div>`;
+}
+const EMPTY = '<div class="empty"><b>逐字稿會在這裡一段段出現</b>轉錄時就能開始閱讀、點時間碼回聽、直接修改文字</div>';
+function renderAll(animateFrom) {
+  paper.classList.toggle('no-ts', !$('showTs').checked);
+  const bl = blocks();
+  paper.innerHTML = bl.length ? bl.map((b, k) => rowHtml(b, k, bl[k-1], animateFrom !== undefined && b.ids[0] >= animateFrom)).join('') : EMPTY;
+  S.onIdx = -1; applySearch(); counts(); legend();
+}
+paper.addEventListener('click', e => {
+  const b = e.target.closest('.ts'); if (b) { au.currentTime = +b.dataset.t; au.play().catch(() => {}); tick(); return; }
+  const sp = e.target.closest('.spk'); if (sp) rename(+sp.dataset.sp);
+});
+// 編輯：一列只有一段時直接寫回；多段合併的列，把整列文字放進第一段、其他段清空
+paper.addEventListener('input', e => {
+  const r = e.target.closest('.row'); if (!r) return;
+  const ids = r.dataset.ids.split(',').map(Number), t = e.target.textContent.trim();
+  ids.forEach((id, j) => S.segs[id].text = j ? '' : t);
+  counts();
+});
+function legend() {
+  const sp = [...new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined))].sort((a, b) => a - b);
+  $('legend').innerHTML = sp.map(i => `<button class="spk" data-sp="${i}" style="--c:${COLORS[i % COLORS.length]}">${esc(spkName(i))}</button>`).join('');
+}
+$('legend').addEventListener('click', e => { const sp = e.target.closest('.spk'); if (sp) rename(+sp.dataset.sp); });
+function rename(i) {
+  $('dlgT').textContent = `把「${spkName(i)}」改名為`; $('dlgIn').value = S.names[i] || ''; $('dlgIn').placeholder = `講者 ${i + 1}`;
+  $('dlg').onclose = () => { if ($('dlg').returnValue === 'ok') { const v = $('dlgIn').value.trim(); if (v) S.names[i] = v; else delete S.names[i]; renderAll(); } };
+  $('dlg').showModal(); $('dlgIn').select();
+}
+function counts() {
+  const segs = S.segs.filter(s => s.text), chars = segs.reduce((a, s) => a + s.text.replace(/\s/g, '').length, 0);
+  const nsp = new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined)).size;
+  $('count').textContent = segs.length ? `${segs.length} 句 · ${chars.toLocaleString()} 字${nsp ? ` · ${nsp} 位講者` : ''}` : '';
+  ['copy','exTxt','exSrt'].forEach(id => $(id).disabled = !segs.length);
+}
+function applySearch() {
+  const q = $('q').value.trim().toLowerCase(); let n = 0;
+  paper.querySelectorAll('.row').forEach(r => { const hit = !q || r.querySelector('.tx').textContent.toLowerCase().includes(q); r.classList.toggle('dim', !hit); if (q && hit) n++; });
+  if (q) $('count').textContent = `找到 ${n} 段符合「${$('q').value.trim()}」`; else counts();
+}
+$('q').addEventListener('input', applySearch);
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') paper.querySelector('.row:not(.dim)')?.scrollIntoView({block:'center', behavior:'smooth'}); if (e.key === 'Escape') { e.target.value = ''; applySearch(); } });
+
+/* ---------- 轉錄 ---------- */
+function setStatus(kind, txt, p) {
+  $('dot').className = 'dot ' + kind; $('stxt').textContent = txt;
+  if (p !== undefined) { S.progress = p; $('barI').style.width = (p*100).toFixed(1) + '%'; draw(); }
+}
+const CHUNK = window.__CHUNK || 40 * 1048576;
+async function uploadFile(f) {
+  const uid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36), parts = Math.max(1, Math.ceil(f.size / CHUNK));
+  for (let i = 0; i < parts; i++) {
+    const fd = new FormData(); fd.append('part', i); fd.append('chunk', f.slice(i*CHUNK, (i+1)*CHUNK), 'part');
+    await new Promise((ok, no) => {
+      const x = new XMLHttpRequest(); x.open('POST', `${S.server}/api/upload/${uid}`);
+      x.upload.onprogress = e => setStatus('run', `上傳中 ${Math.round((i*CHUNK + e.loaded) / f.size * 100)}%`, 0);
+      x.onload = () => x.status === 200 ? ok() : no(new Error('上傳失敗（' + x.status + '）'));
+      x.onerror = () => no(new Error('上傳失敗，請確認 Colab 仍在執行'));
+      x.send(fd);
+    });
+    if (S.status !== 'run') throw new Error('已取消');
+  }
+  return uid;
+}
+$('go').addEventListener('click', async () => {
+  if (S.status === 'run') { S.status = 'stopping'; if (S.job) api(`/api/jobs/${S.job}/cancel`, {method:'POST'}).catch(() => {}); setStatus('run', '停止中…'); return; }
+  if (!S.server) return disconnected();
+  if (S.segs.length && !confirm('重新轉錄會取代目前的逐字稿，確定嗎？')) return;
+  savePrefs(); S.segs = []; S.names = {}; S.rev = 0; S.job = null; renderAll();
+  S.status = 'run'; renderModels(); $('go').textContent = '停止';
+  const f = S.file;
+  try {
+    const uid = await uploadFile(f);
+    const fd = new FormData();
+    Object.entries({uid, filename:f.name, language:$('lang').value, model:S.model, trad:$('trad').checked ? '1' : '0',
+      hint:$('hint').value, speakers:$('spk').value}).forEach(([k, v]) => fd.append(k, v));
+    const r = await api('/api/transcribe', {method:'POST', body:fd});
+    if (S.file !== f) return;
+    S.job = r.id; setStatus('run', '排隊中…'); poll(f);
+  } catch (e) { if (S.file === f) finish('', e.message === '已取消' ? '已停止' : e.message, true); }
+});
+function finish(kind, msg, isErr) {
+  S.status = 'idle'; $('go').textContent = '重新轉錄'; renderModels();
+  setStatus(kind, msg, kind === 'ok' ? 1 : undefined); if (isErr) toast(msg);
+}
+async function poll(f) {
+  if (S.file !== f) return;
+  try {
+    const j = await api(`/api/jobs/${S.job}?since=${S.segs.length}&rev=${S.rev}`);
+    if (S.file !== f) return;
+    if (j.full) { S.segs = j.segments; S.rev = j.rev; renderAll(); }
+    else if (j.segments.length) { const from = S.segs.length; S.segs.push(...j.segments); renderAll(from); }
+    const lang = LANGS[j.language] ? ' · ' + LANGS[j.language] : '';
+    if (j.status === 'queued') setStatus('run', j.ahead ? `排隊中，前面還有 ${j.ahead} 個檔案` : '排隊中…');
+    else if (j.status === 'loading') setStatus('run', '載入模型中（換模型時約需 1–2 分鐘）…');
+    else if (j.status === 'transcribing') setStatus('run', `轉錄中 ${Math.round(j.progress*100)}%${lang}`, j.progress);
+    else if (j.status === 'diarizing') setStatus('run', '分辨講者中…', 1);
+    else if (j.status === 'done') { finish('ok', `完成${lang} · ${MODELS.find(m => m.key === S.model)?.name || ''}`); toast(j.warning || '轉錄完成'); return; }
+    else if (j.status === 'cancelled') return finish('', '已停止');
+    else if (j.status === 'error') return finish('', '轉錄失敗：' + (j.error || '未知錯誤'), true);
+  } catch (e) {
+    if (/找不到/.test(e.message)) return finish('', e.message, true);
+    setStatus('run', '連線不穩，重試中…');
+  }
+  S.timer = setTimeout(() => poll(f), 1200);
+}
+addEventListener('beforeunload', e => { if (S.status === 'run' || S.segs.length) e.preventDefault(); });
+
+/* ---------- 匯出 ---------- */
+const base = () => (S.file?.name || '逐字稿').replace(/\.[^.]+$/, '');
+function asText() {
+  const ts = $('showTs').checked, bl = blocks().filter(b => blockText(b));
+  return bl.map((b, k) => { const head = [ts ? `[${fmt(b.start, 'full')}]` : '', b.speaker !== undefined ? spkName(b.speaker) + '：' : ''].filter(Boolean).join(' ');
+    return (head ? head + (b.speaker !== undefined ? '' : ' ') : '') + blockText(b); }).join(hasSpk() ? '\n\n' : '\n');
+}
+const asSrt = () => S.segs.filter(s => s.text).map((s, i) => `${i+1}\n${fmt(s.start,'srt')} --> ${fmt(s.end,'srt')}\n${s.speaker !== undefined ? spkName(s.speaker) + '：' : ''}${s.text}\n`).join('\n');
+function save(text, ext) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], {type:'text/plain;charset=utf-8'}));
+  a.download = base() + ext; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('已下載 ' + a.download); }
+$('exTxt').addEventListener('click', () => save(asText(), '.txt'));
+$('exSrt').addEventListener('click', () => save(asSrt(), '.srt'));
+$('copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(asText()); }
+  catch { const t = document.createElement('textarea'); t.value = asText(); document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  toast('已複製全文'); });
+
+renderAll();
+}
+</script>
+</body>
+</html>
