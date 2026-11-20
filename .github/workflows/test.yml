@@ -28,10 +28,22 @@ jobs:
           uv pip install --python .venv -r engine/requirements.lock
 
       - name: 產生三人對話測試錄音
-        run: .venv/bin/python tests/make_dialog.py /tmp/t
+        run: |
+          mkdir -p ci-log
+          .venv/bin/python tests/make_dialog.py /tmp/t 2>&1 | tee ci-log/make_dialog.txt
 
       - name: 端對端測試（上傳、轉錄、講者分辨）
-        run: .venv/bin/python tests/e2e.py /tmp/t/dialog.mp3 /tmp/t/dialog_truth.json small
+        run: |
+          set -o pipefail
+          .venv/bin/python tests/e2e.py /tmp/t/dialog.mp3 /tmp/t/dialog_truth.json small 2>&1 | tee ci-log/e2e.txt
+
+      - name: 保存測試紀錄到 ci-logs 分支（方便沒有登入也能查看）
+        if: always()
+        run: |
+          cd ci-log && git init -q && git checkout -q -b ci-logs
+          echo "${{ github.sha }} ${{ job.status }} $(date -u +%FT%TZ)" > RESULT.txt
+          git add -A && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "log ${{ github.sha }}"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-logs
 
       - name: 測試通過，發佈到 stable
         if: success() && github.ref == 'refs/heads/main'
