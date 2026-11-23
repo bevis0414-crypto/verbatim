@@ -145,6 +145,7 @@ aside{display:flex;flex-direction:column;gap:18px;align-self:start;position:stic
 .mdl b{font-size:16px;font-weight:500}
 .mdl .tag{font-size:12px;color:var(--mute);align-self:center;white-space:nowrap}
 .mdl .tag.ok{color:var(--ok)}
+.mdl .del{color:var(--mute);text-decoration:underline;cursor:pointer;margin-left:8px;font-size:12px}.mdl .del:hover{color:var(--acc)}
 .mdl p{grid-column:1/-1;margin:0;font-size:13px;color:var(--mute);line-height:1.5}
 .meters{grid-column:1/-1;display:flex;gap:16px;margin-top:5px;font-size:12px;color:var(--mute)}
 .meters span{display:flex;align-items:center;gap:6px}
@@ -265,6 +266,12 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
       <div id="cpuBox" hidden style="margin:0 0 12px"><button class="btn acc" id="switchWeb" style="width:100%">改用這台電腦的 GPU</button></div>
       <p class="note" id="cpuNote" hidden style="color:var(--acc);margin:0 0 10px">這次 Colab 沒有分到 GPU，用 CPU 轉錄。建議選 Small 或 Medium，Large 在 CPU 上轉 1 小時錄音可能要好幾個小時。</p>
       <div class="models" id="models"></div>
+      <div id="webStore" hidden style="margin-top:12px">
+        <div class="note" id="webUsage" style="margin:0 0 6px"></div>
+        <label class="sw" style="min-height:36px;font-size:14px">轉錄完自動刪除模型<input type="checkbox" id="autoClear"></label>
+        <button class="tb" id="clearAll" style="width:100%;margin-top:6px" hidden>刪除全部已下載的模型</button>
+        <p class="note" style="margin-top:6px">模型存在 Chrome 的網站資料裡（不是「下載」資料夾），只有這個網站會用到。刪除後下次使用要重新下載。</p>
+      </div>
     </div>
     <div class="card">
       <h2>轉錄設定</h2>
@@ -368,16 +375,16 @@ const P = store.get('prefs', {});
 if (MODELS.some(m => m.key === P.model)) S.model = P.model;
 S.webModel = WEB_MODELS.some(m => m.key === P.webModel) ? P.webModel : 'large-v2';
 for (const [id, k] of [['lang','lang'],['spk','spk'],['hint','hint']]) if (P[k] !== undefined) $(id).value = P[k];
-for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge'],['showAi','showAi']]) if (P[k] !== undefined) $(id).checked = P[k];
+for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge'],['showAi','showAi'],['autoClear','autoClear']]) if (P[k] !== undefined) $(id).checked = P[k];
 const savePrefs = () => store.set('prefs', {model:S.model, webModel:S.webModel, lang:$('lang').value, spk:$('spk').value, hint:$('hint').value,
-  trad:$('trad').checked, showTs:$('showTs').checked, merge:$('merge').checked, showAi:$('showAi').checked});
+  trad:$('trad').checked, showTs:$('showTs').checked, merge:$('merge').checked, showAi:$('showAi').checked, autoClear:$('autoClear').checked});
 ['lang','spk','hint','trad'].forEach(id => $(id).addEventListener('change', savePrefs));
 ['showTs','merge','showAi'].forEach(id => $(id).addEventListener('change', () => { savePrefs(); renderAll(); }));
 
 const pips = n => `<span class="pips">${[1,2,3,4].map(i => `<i class="${i<=n?'f':''}"></i>`).join('')}</span>`;
 function renderModels() {
   const busy = S.status === 'run', cpu = S.sys && !S.sys.mock && S.sys.device === 'cpu';
-  const tag = m => isWeb() ? (S.webFailed?.has(m.key) ? '<span class="tag" style="color:var(--acc)">這台電腦跑不動</span>' : S.webCached?.has(m.key) ? '<span class="tag ok">✓ 已下載</span>' : m.big ? '<span class="tag" style="color:#f7c948">檔案大</span>' : '<span class="tag">需下載</span>')
+  const tag = m => isWeb() ? (S.webFailed?.has(m.key) ? '<span class="tag" style="color:var(--acc)">這台電腦跑不動</span>' : S.webCached?.has(m.key) ? `<span class="tag ok">✓ 已下載${S.webSize?.[m.key] ? ' ' + mb(S.webSize[m.key]) : ''}<span class="del" data-del="${m.key}" role="button" tabindex="0">刪除</span></span>` : m.big ? '<span class="tag" style="color:#f7c948">檔案大</span>' : '<span class="tag">需下載</span>')
     : S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : cpu && m.acc >= 4 ? '<span class="tag" style="color:var(--acc)">沒有 GPU 時很慢</span>' : '';
   $('models').innerHTML = curModels().map(m => `<button class="mdl${curKey()===m.key?' on':''}" data-k="${m.key}" ${busy?'disabled':''}>
     <b>${m.name}</b>${tag(m)}<p>${m.desc}</p>
@@ -399,8 +406,8 @@ function applyMode() {
   $('spk').disabled = web; $('hint').disabled = web;
   $('spkNote').textContent = web ? '用這台電腦的 GPU 時沒有講者分辨；需要的話請改用 Colab。' : '知道有幾個人說話時，直接指定人數會更準。';
   $('proof').title = web ? '用這台電腦的 GPU 時沒有 AI 校對；需要的話請改用 Colab' : '';
-  $('cpuBox').hidden = true; $('cpuNote').hidden = true;
-  renderModels(); counts();
+  $('cpuBox').hidden = true; $('cpuNote').hidden = true; $('webStore').hidden = !web;
+  renderModels(); counts(); if (web) webUsage();
 }
 async function useBrowser() {
   if (MOBILE) { $('gpuMsg').textContent = '手機上沒辦法用，請用電腦的 Chrome 或 Edge，或改用 Colab。'; return toast($('gpuMsg').textContent); }
@@ -827,6 +834,9 @@ self.onmessage = async ({ data: m }) => {
         key = m.key;
       }
       postMessage({ type: 'ready', id: m.id });
+    } else if (m.type === 'unload') {
+      if (asr) { try { await asr.dispose(); } catch {} } asr = null; key = null;
+      postMessage({ type: 'ready', id: m.id });
     } else if (m.type === 'run') {
       const opt = { task: 'transcribe', return_timestamps: true };
       if (m.lang) opt.language = m.lang;
@@ -848,11 +858,45 @@ function webWorker() {
   return wk;
 }
 const wkCall = (msg, tr) => new Promise((ok, no) => { const id = ++wkId; wkPending.set(id, {ok, no}); webWorker().postMessage({...msg, id}, tr || []); });
+// 模型存在 Cache Storage（transformers-cache），依模型的網址分辨是哪個模型
 async function webCheckCached() {
-  S.webCached = new Set();
-  try { const keys = (await (await caches.open('transformers-cache')).keys()).map(r => r.url);
-    WEB_MODELS.forEach(m => { if (keys.some(u => u.includes(m.repo) && u.includes('.onnx'))) S.webCached.add(m.key); }); } catch {}
+  S.webCached = new Set(); S.webSize = {};
+  try {
+    const c = await caches.open('transformers-cache');
+    for (const req of await c.keys()) {
+      const m = WEB_MODELS.find(x => req.url.includes('/' + x.repo + '/')); if (!m) continue;
+      if (req.url.includes('.onnx')) S.webCached.add(m.key);
+      const len = +((await c.match(req))?.headers.get('content-length') || 0); S.webSize[m.key] = (S.webSize[m.key] || 0) + len;
+    }
+  } catch {}
+  await webUsage();
 }
+async function webUsage() {
+  if (!isWeb()) return;
+  const total = Object.entries(S.webSize || {}).filter(([k]) => S.webCached.has(k)).reduce((a, [, v]) => a + v, 0);
+  let free = '';
+  try { const e = await navigator.storage.estimate(); if (e.quota) free = `，這台電腦還可以再放約 ${mb(e.quota - e.usage)}`; } catch {}
+  $('webUsage').textContent = S.webCached.size ? `已下載 ${S.webCached.size} 個模型，共 ${mb(total)}${free}。` : `還沒有下載任何模型${free}。`;
+  $('clearAll').hidden = !S.webCached.size;
+}
+async function webDelete(keys) {
+  if (S.status === 'run') { toast('轉錄進行中，完成後再刪除'); return false; }
+  try {
+    const c = await caches.open('transformers-cache'), repos = WEB_MODELS.filter(m => keys.includes(m.key)).map(m => '/' + m.repo + '/');
+    for (const req of await c.keys()) if (repos.some(r => req.url.includes(r))) await c.delete(req);
+  } catch (e) { toast('刪除失敗：' + e.message); return false; }
+  if (W.loaded && keys.some(k => W.loaded.startsWith(k))) { try { await wkCall({type: 'unload'}); } catch {} W.loaded = null; }  // 也從顯示卡記憶體卸下
+  await webCheckCached(); renderModels(); return true;
+}
+$('models').addEventListener('click', async e => {
+  const d = e.target.closest('[data-del]'); if (!d) return; e.stopPropagation();
+  const m = WEB_MODELS.find(x => x.key === d.dataset.del);
+  if (confirm(`刪除「${m.name}」已下載的模型檔？下次使用要重新下載。`) && await webDelete([m.key])) toast(`已刪除 ${m.name}`);
+}, true);
+$('clearAll').addEventListener('click', async () => {
+  if (confirm('刪除全部已下載的模型？下次使用要重新下載。') && await webDelete(WEB_MODELS.map(m => m.key))) toast('已刪除全部模型');
+});
+$('autoClear').addEventListener('change', savePrefs);
 let occ = null;  // 繁體轉換（簡→臺灣正體），需要時才載入
 const loadOpenCC = () => occ ? Promise.resolve(occ) : new Promise(ok => {
   const sc = document.createElement('script'); sc.src = window.__OPENCC_URL || 'https://cdn.jsdelivr.net/npm/opencc-js@1.4.2/dist/umd/cn2t.js';
@@ -902,9 +946,16 @@ async function webTranscribe() {
         catch (e) { lastErr = e; console.warn('載入失敗，換下一種格式', dt, e); }
         if (S.status !== 'run') return finish('', '已停止');
       }
-      if (lastErr) { (S.webFailed ||= new Set()).add(m.key); renderModels();
-        throw new Error(m.big ? `這台電腦的顯示卡載不動 ${m.name}（${lastErr.message}）。可以改選 Large v3 Turbo，準確度接近、檔案小很多。` : lastErr.message); }
-      W.loaded = m.key; S.webCached?.add(m.key); renderModels();
+      if (lastErr) {
+        // 網路問題（下載不到）和顯示卡跑不動要分開說，網路問題不能讓人以為要換模型
+        if (/fetch|network|import|Load failed|ERR_|HTTP|status code|timed? ?out/i.test(lastErr.message)) {
+          wk?.terminate(); wk = null; wkPending.clear();   // 下載元件失敗的 worker 不能再用，下次重建
+          throw new Error(`模型下載失敗，請確認網路連線後再試一次（${lastErr.message}）`);
+        }
+        (S.webFailed ||= new Set()).add(m.key); renderModels();
+        throw new Error(m.big ? `這台電腦的顯示卡載不動 ${m.name}（${lastErr.message}）。可以改選 Large v3 Turbo，準確度接近、檔案小很多。` : lastErr.message);
+      }
+      W.loaded = m.key; await webCheckCached(); renderModels();
     }
     // 3. 每 20–30 秒一段送進模型，結果一段段出現
     const t0 = performance.now(); let pos = 0, prev = '', zh = lang === 'zh';
@@ -931,7 +982,10 @@ async function webTranscribe() {
     }
     if (S.file !== f) return;
     if (S.status === 'stopping') finish('', `已停止 · 保留 ${S.segs.length} 句`);
-    else { finish('ok', `完成 · ${m.name} · 這台電腦的 GPU`); toast('轉錄完成'); }
+    else {
+      finish('ok', `完成 · ${m.name} · 這台電腦的 GPU`);
+      if ($('autoClear').checked) { await webDelete([m.key]); toast(`轉錄完成，已刪除 ${m.name} 的模型檔`); } else toast('轉錄完成');
+    }
   } catch (e) {
     console.error(e);
     if (S.file !== f) return;
