@@ -197,8 +197,8 @@ def register_autostart():
     if WIN:
         import winreg
         line = " ".join(f'"{c}"' for c in cmd)
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
-                            winreg.KEY_SET_VALUE) as k:
+        # CreateKey：全新的 Windows 帳號可能還沒有這個機碼，沒有就建立
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run") as k:
             winreg.SetValueEx(k, "VerbatimEngine", 0, winreg.REG_SZ, line)
     elif MAC:
         plist = os.path.expanduser("~/Library/LaunchAgents/io.github.verbatim.engine.plist")
@@ -313,7 +313,10 @@ def main():
     say("② 準備執行環境…")
     ensure_env()
     say("③ 設定開機自動啟動…")
-    register_autostart()
+    try:
+        register_autostart()
+    except Exception as e:  # 設定失敗不影響這次使用，只是下次開機要再執行一次安裝程式
+        say(f"⚠️ 無法設定開機自動啟動（{e}）。這次可以正常使用；之後開機若網站連不上，再執行一次安裝程式即可。")
     say("④ 啟動引擎…")
     start_background_detached()
     s = None
