@@ -66,7 +66,7 @@ def main():
             time.sleep(2)
         print(json.dumps(j, ensure_ascii=False, indent=1))
         print("diag:", json.dumps(call("/api/diag"), ensure_ascii=False))
-        truth = json.load(open(TRUTH))
+        truth = json.load(open(TRUTH, encoding="utf-8"))
         segs = j["segments"]
         text = "".join(s["text"] for s in segs)
         n_spk = len({s.get("speaker") for s in segs})

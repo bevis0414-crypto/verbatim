@@ -95,17 +95,17 @@ def ensure_env():
     lock_path = os.path.join(ROOT, "engine", LOCK)
     want = hashlib.sha256(open(lock_path, "rb").read()).hexdigest()
     stamp = os.path.join(ROOT, "venv", ".lock-sha")
-    if os.path.exists(stamp) and open(stamp).read() == want and os.path.exists(VENV_PY):
+    if os.path.exists(stamp) and open(stamp, encoding="utf-8").read() == want and os.path.exists(VENV_PY):
         return False
     say("準備執行環境（第一次約 3–5 分鐘，之後只有更新時才會再裝）…")
     uv = uv_exe()
     shutil.rmtree(os.path.join(ROOT, "venv"), ignore_errors=True)
     for cmd in ([uv, "venv", "-q", "-p", "3.11", os.path.join(ROOT, "venv")],
                 [uv, "pip", "install", "-q", "--python", VENV_PY, "-r", lock_path]):
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
             raise SystemExit("安裝執行環境失敗：\n" + (r.stderr or r.stdout)[-1500:])
-    open(stamp, "w").write(want)
+    open(stamp, "w", encoding="utf-8").write(want)
     return True
 
 
@@ -143,7 +143,7 @@ def wait_ready(proc, limit=120):
 def supervise(hidden=True):
     """在前景執行：啟動引擎，當掉自動重啟；10 分鐘內當掉 3 次就停止"""
     crashes = []
-    open(PIDFILE, "w").write(str(os.getpid()))
+    open(PIDFILE, "w", encoding="utf-8").write(str(os.getpid()))
     while True:
         if os.path.exists(STOPFILE):  # 安裝程式要求停止（例如正在更新環境）
             return
@@ -204,7 +204,7 @@ def register_autostart():
         plist = os.path.expanduser("~/Library/LaunchAgents/io.github.verbatim.engine.plist")
         os.makedirs(os.path.dirname(plist), exist_ok=True)
         args = "".join(f"<string>{c}</string>" for c in cmd)
-        open(plist, "w").write(
+        open(plist, "w", encoding="utf-8").write(
             '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
             '"http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>'
             f'<key>Label</key><string>io.github.verbatim.engine</string><key>ProgramArguments</key><array>{args}</array>'
@@ -212,7 +212,7 @@ def register_autostart():
     else:
         d = os.path.expanduser("~/.config/autostart")
         os.makedirs(d, exist_ok=True)
-        open(os.path.join(d, "verbatim-engine.desktop"), "w").write(
+        open(os.path.join(d, "verbatim-engine.desktop"), "w", encoding="utf-8").write(
             "[Desktop Entry]\nType=Application\nName=逐字 Verbatim 引擎\nExec=" + " ".join(f'"{c}"' for c in cmd) +
             "\nX-GNOME-Autostart-enabled=true\nNoDisplay=true\n")
 
@@ -249,9 +249,9 @@ def kill_pid(pid):
 
 def stop_engine():
     """先請背景看守員停下（避免它把引擎重新開起來），再關引擎"""
-    open(STOPFILE, "w").close()
+    open(STOPFILE, "w", encoding="utf-8").close()
     try:
-        kill_pid(int(open(PIDFILE).read()))
+        kill_pid(int(open(PIDFILE, encoding="utf-8").read()))
     except Exception:
         pass
     s = engine_status()

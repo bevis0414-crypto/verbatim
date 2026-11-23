@@ -31,5 +31,5 @@ with wave.open(os.path.join(OUT, "dialog_raw.wav"), "wb") as w:
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr); w.writeframes(pcm.tobytes())
 subprocess.run([FF,"-v","error","-y","-i",os.path.join(OUT, "dialog_raw.wav"),"-ar","16000","-ac","1",os.path.join(OUT, "dialog.wav")], check=True)
 subprocess.run([FF,"-v","error","-y","-i",os.path.join(OUT, "dialog_raw.wav"),"-b:a","64k",os.path.join(OUT, "dialog.mp3")], check=True)
-json.dump(truth, open(os.path.join(OUT, "dialog_truth.json"),"w"), ensure_ascii=False, indent=1)
+json.dump(truth, open(os.path.join(OUT, "dialog_truth.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print("sr", sr, "dur", round(t,1)); [print(x) for x in truth]

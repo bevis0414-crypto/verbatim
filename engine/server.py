@@ -130,7 +130,7 @@ def device_info():
             try:
                 import subprocess
                 _state["gpu"] = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                                               capture_output=True, text=True).stdout.strip().split("\n")[0] or "GPU"
+                                               capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip().split("\n")[0] or "GPU"
             except Exception:
                 _state["gpu"] = "GPU"
     return _state
@@ -450,7 +450,7 @@ def diag():
 
 def _log_tail(n=25):
     try:
-        lines = open(os.path.join(DATA_DIR, "engine.log"), errors="ignore").read().splitlines()
+        lines = open(os.path.join(DATA_DIR, "engine.log"), encoding="utf-8", errors="ignore").read().splitlines()
         return [l[:300] for l in lines if l.strip()][-n:]
     except Exception:
         return []

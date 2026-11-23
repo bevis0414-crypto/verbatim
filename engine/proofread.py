@@ -70,7 +70,7 @@ def ensure_installed(status=lambda s: None):
     wheel, extras = wheel_and_extras()
     uv = os.environ.get("VERBATIM_UV") or shutil.which("uv")
     cmd = ([uv, "pip", "install", "-q", "--python", sys.executable] if uv else [sys.executable, "-m", "pip", "install", "-q"])
-    r = subprocess.run(cmd + [wheel] + extras, capture_output=True, text=True)
+    r = subprocess.run(cmd + [wheel] + extras, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise LLMUnavailable("校對模組安裝失敗：" + (r.stderr or r.stdout).strip()[-300:])
 

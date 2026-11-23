@@ -64,16 +64,16 @@ say("② 準備執行環境（第一次約 1–2 分鐘）…")
 lock = open(f"{ROOT}/engine/requirements.lock", "rb").read()
 stamp = f"{ROOT}/venv/.lock-sha"
 want = hashlib.sha256(lock).hexdigest()
-if not (os.path.exists(stamp) and open(stamp).read() == want):
-    r = subprocess.run(f"{sys.executable} -m pip install -q uv=={UV_VERSION}", shell=True, capture_output=True, text=True)
+if not (os.path.exists(stamp) and open(stamp, encoding="utf-8").read() == want):
+    r = subprocess.run(f"{sys.executable} -m pip install -q uv=={UV_VERSION}", shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     uv = shutil.which("uv") or os.path.join(os.path.dirname(sys.executable), "uv")
     shutil.rmtree(f"{ROOT}/venv", ignore_errors=True)
     for cmd in ([uv, "venv", "-q", "-p", "3.11", f"{ROOT}/venv"],
                 [uv, "pip", "install", "-q", "--python", f"{ROOT}/venv/bin/python", "-r", f"{ROOT}/engine/requirements.lock"]):
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
             fail("執行環境安裝失敗", "<pre style='white-space:pre-wrap;font-size:12px'>" + (r.stderr or r.stdout)[-1500:] + "</pre>")
-    open(stamp, "w").write(want)
+    open(stamp, "w", encoding="utf-8").write(want)
 
 # ④ 啟動引擎（重新執行時先關掉舊的引擎和看守員）
 if globals().get("_verbatim_stop"):
@@ -83,13 +83,13 @@ subprocess.run(f"pkill -f '^[^ ]*python[^ ]* {ROOT}/(engine/)?server[.]py'; fuse
 for _ in range(10):
     if not alive("http://localhost:8000"): break
     time.sleep(1)
-want_ver = re.search(r'VERSION = "([^"]+)"', open(f"{ROOT}/engine/server.py").read()).group(1)
+want_ver = re.search(r'VERSION = "([^"]+)"', open(f"{ROOT}/engine/server.py", encoding="utf-8").read()).group(1)
 
 def start_engine(preload=PRELOAD):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "LD_LIBRARY_PATH"))}
     env.update(PORT="8000", VERBATIM_PRELOAD=preload, VERBATIM_DATA=ROOT)
     return subprocess.Popen([f"{ROOT}/venv/bin/python", f"{ROOT}/engine/server.py"], env=env, cwd=ROOT,
-                            stdout=open(f"{ROOT}/engine.log", "w"), stderr=subprocess.STDOUT)
+                            stdout=open(f"{ROOT}/engine.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)
 
 def wait_ready(proc, limit=480):
     """等引擎準備好；引擎程序先結束（例如啟動失敗）就立刻回傳 None"""
@@ -110,7 +110,7 @@ if not st and other and other.get("pid") != engine.pid:  # 舊引擎還佔著 80
 if st and st.get("version") != want_ver:
     fail("舊版引擎沒有關掉", f"目前執行的是 {st.get('version', '舊版')}，應該是 {want_ver}。請從上方選單「執行階段 → 中斷連線並刪除執行階段」，再按一次 Ctrl+F9。")
 if not st:
-    fail("引擎啟動失敗", "<pre style='white-space:pre-wrap;font-size:12px'>" + open(f"{ROOT}/engine.log").read()[-1500:] + "</pre>")
+    fail("引擎啟動失敗", "<pre style='white-space:pre-wrap;font-size:12px'>" + open(f"{ROOT}/engine.log", encoding="utf-8", errors="ignore").read()[-1500:] + "</pre>")
 
 # ⑤ 對外連線網址（Cloudflare 免費通道，固定版本）
 say("④ 建立連線網址…")
@@ -121,7 +121,7 @@ if not os.path.exists(f"{ROOT}/cloudflared"):
 def start_tunnel():
     subprocess.run("pkill -f cloudflared", shell=True)
     p = subprocess.Popen([f"{ROOT}/cloudflared", "tunnel", "--no-autoupdate", "--url", "http://localhost:8000"],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
     u, t0 = None, time.time()
     for line in p.stdout:
         m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
@@ -168,7 +168,7 @@ def watchdog(stop):
         try:
             if engine.poll() is not None and len([t for t in crashes if time.time() - t < 600]) >= 3:
                 if crashes[-1] != -1:  # 10 分鐘內當掉 3 次以上：停止自動重啟，請使用者回報
-                    tail = open(f"{ROOT}/engine.log", errors="ignore").read()[-800:]
+                    tail = open(f"{ROOT}/engine.log", encoding="utf-8", errors="ignore").read()[-800:]
                     events.append("❌ 引擎在 10 分鐘內反覆停止，已暫停自動重啟。請把這個畫面截圖給網站管理者，"
                                   "然後從「執行階段 → 中斷連線並刪除執行階段」重新開始。"
                                   f"<pre style='white-space:pre-wrap;font-size:11px;color:#8b9098'>{tail}</pre>")
@@ -178,10 +178,10 @@ def watchdog(stop):
             if engine.poll() is not None:  # 引擎行程結束了
                 crashes.append(time.time())
                 code = engine.returncode
-                tail = open(f"{ROOT}/engine.log", errors="ignore").read()[-1500:]
+                tail = open(f"{ROOT}/engine.log", encoding="utf-8", errors="ignore").read()[-1500:]
                 ts = time.strftime("%H:%M")
                 n = len([e for e in events if "引擎" in e]) + 1
-                open(f"{ROOT}/engine-crash-{n}.log", "w").write(tail)
+                open(f"{ROOT}/engine-crash-{n}.log", "w", encoding="utf-8").write(tail)
                 why = "可能是記憶體不足（RAM 用完）" if code in (-9, 137) else f"結束代碼 {code}"
                 events.append(f"⚠️ {ts} 引擎停止（{why}），已自動重新啟動。正在進行的轉錄需要重新上傳。")
                 handle.update(render())
