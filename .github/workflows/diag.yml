@@ -2,6 +2,8 @@ name: 模型檔診斷
 on:
   push:
     branches: [diag]
+permissions:
+  contents: write
 jobs:
   inspect:
     runs-on: ubuntu-24.04
