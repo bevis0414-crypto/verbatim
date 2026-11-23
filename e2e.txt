@@ -1,0 +1,127 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[2026-11-23 09:24:00.581] [ctranslate2] [thread 8411] [warning] Tip: experimental MPS backend is available and often 2x+ faster than CPU on Apple Silicon (varies by workload and hardware). Try device="mps".
+llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+system: {'app': 'verbatim', 'version': '2026.11.23-3', 'pid': 1768, 'local': False, 'os': 'darwin', 'device': 'cpu', 'gpu': 'arm64', 'note': '', 'ready': True, 'mock': False, 'loaded': None}
+{
+ "id": "c6e646e8ed",
+ "status": "done",
+ "progress": 1.0,
+ "duration": 36.23,
+ "language": "zh",
+ "error": null,
+ "warning": null,
+ "rev": 1,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 8.0,
+   "text": "大家好 今天的工作方主要向親親各位對公園擺散的想法。",
+   "speaker": 0
+  },
+  {
+   "start": 8.0,
+   "end": 12.0,
+   "text": "我記得高大招架的身材爛了五百項走路跪踏。",
+   "speaker": 1
+  },
+  {
+   "start": 12.0,
+   "end": 16.0,
+   "text": "得點納趙寧是第一個議題。",
+   "speaker": 0
+  },
+  {
+   "start": 16.0,
+   "end": 19.0,
+   "text": "還有其他意見嗎？",
+   "speaker": 0
+  },
+  {
+   "start": 19.0,
+   "end": 24.0,
+   "text": "很多長輩期望坐1.91的座椅可以坐下來休息。",
+   "speaker": 2
+  },
+  {
+   "start": 24.0,
+   "end": 29.0,
+   "text": "用愛至今車騎的看快自討把，不到核四到三餐。",
+   "speaker": 1
+  },
+  {
+   "start": 29.0,
+   "end": 32.84,
+   "text": "考虎我們把這些意見計下來",
+   "speaker": 0
+  },
+  {
+   "start": 32.84,
+   "end": 35.4,
+   "text": "下一輪再討論配置",
+   "speaker": 0
+  }
+ ],
+ "full": true,
+ "ahead": 0
+}
+diag: {"version": "2026.11.23-3", "python": "3.11.9", "device": "cpu", "gpu": "arm64", "note": "", "model": "small", "speaker_model": "ok", "packages": {"faster-whisper": "1.2.1", "ctranslate2": "4.9.0", "sherpa-onnx": "2.0.2", "nvidia-cublas-cu12": null, "nvidia-cudnn-cu12": null, "numpy": "2.4.6"}, "errors": [], "log_tail": []}
+proofread: {
+ "status": "done",
+ "done": 8,
+ "total": 8,
+ "error": null,
+ "result": [
+  {
+   "text": "大家好，今天的工作方主要向親親各位對公園擺散的想法。",
+   "para": false,
+   "changed": true
+  },
+  {
+   "text": "我記得高大招架的身材爛了五百項走路跪踏。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "得點納趙寧是第一個議題。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "還有其他意見嗎？",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "很多長輩期望坐1.91的座椅可以坐下來休息。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "用愛至今車騎的看快自討把，不到核四到三餐。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "考虎我們把這些意見計下來。",
+   "para": false,
+   "changed": true
+  },
+  {
+   "text": "下一輪再討論配置。",
+   "para": false,
+   "changed": true
+  }
+ ]
+}
+✅ 完成
+✅ 沒有警告
+✅ 有逐字稿
+✅ 繁體輸出
+✅ 內容大致正確
+✅ 沒有「壹」
+✅ 講者人數
+✅ 校對完成
+✅ 校對沒有掉句
+✅ 校對後仍是繁體
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

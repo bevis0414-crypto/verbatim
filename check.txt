@@ -1,0 +1,4 @@
+{"app":"verbatim","version":"2026.11.23-3","pid":1217,"local":true,"os":"darwin","device":"cpu","gpu":"arm64","note":"","ready":true,"mock":false,"loaded":null}
+OK 引擎在背景待命
+OK 開機啟動
+OK 私人網路存取
