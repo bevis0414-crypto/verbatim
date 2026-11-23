@@ -330,6 +330,7 @@ const REPO = (() => {
 })();
 const COLAB = `https://colab.research.google.com/github/${REPO.owner}/${REPO.name}/blob/main/verbatim_colab.ipynb`;
 
+const SITE_VERSION = '2026.11.23-5';   // 每次更新網站都要改；用來偵測瀏覽器是否還在用快取裡的舊版
 const $ = id => document.getElementById(id);
 const au = $('au'), cv = $('cv'), paper = $('paper');
 const MODELS = [
@@ -399,6 +400,20 @@ function cpuHint() {
   if (cpu) $('cpuNote').textContent = '這次 Colab 沒有分到 GPU，用 CPU 轉錄會很慢。建議改用這台電腦的 GPU，或在 Colab 選 Small、Medium。';
 }
 $('models').addEventListener('click', e => { const b = e.target.closest('.mdl'); if (!b || b.disabled) return; if (isWeb()) S.webModel = b.dataset.k; else S.model = b.dataset.k; savePrefs(); renderModels(); });
+
+/* ---------- 新版檢查：GitHub 網站會被瀏覽器快取最多 10 分鐘，打開時繞過快取看一次 ---------- */
+async function checkUpdate() {
+  if (location.protocol === 'file:') return;
+  try {
+    const html = await (await fetch(location.pathname + '?v=' + Date.now(), {cache: 'no-store'})).text();
+    const v = (html.match(/SITE_VERSION = '([^']+)'/) || [])[1];
+    if (v && v !== SITE_VERSION) {
+      const t = $('toast'); t.innerHTML = `網站有新版本（${esc(v)}），<u style="cursor:pointer">按這裡更新</u>`; t.classList.add('show'); t.style.pointerEvents = 'auto';
+      t.onclick = () => { if (S.segs.length && !confirm('更新會重新載入網頁，目前的逐字稿要先下載保存。確定要更新嗎？')) return; location.reload(); };
+    }
+  } catch {}
+}
+checkUpdate(); setInterval(() => { if (S.status !== 'run' && !S.proof) checkUpdate(); }, 10 * 60000);
 
 /* ---------- 引擎模式：Colab（伺服器）或這台電腦的 GPU（瀏覽器） ---------- */
 const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || navigator.userAgentData?.mobile;
@@ -768,7 +783,7 @@ function finish(kind, msg, isErr) {
 }
 $('diagBtn').addEventListener('click', async () => {
   let d = null; try { d = await api('/api/diag', {timeout: 10000}, S.jobServer || S.server); } catch {}
-  const info = ['【逐字 Verbatim 錯誤回報】', '時間：' + new Date().toLocaleString('zh-TW'), '錯誤：' + (S.lastError || ''),
+  const info = ['【逐字 Verbatim 錯誤回報】', '網站版本：' + SITE_VERSION, '時間：' + new Date().toLocaleString('zh-TW'), '錯誤：' + (S.lastError || ''),
     '檔案：' + (S.file ? `${S.file.name}（${mb(S.file.size)}，${S.file.type || '未知格式'}）` : '—'),
     '模型：' + S.model + '　講者：' + $('spk').value + '　語言：' + ($('lang').value || '自動'),
     '瀏覽器：' + navigator.userAgent, '連線網址：' + (S.jobServer || S.server || '—'), '網路紀錄：' + (S.netLog.join(' | ') || '無'),
