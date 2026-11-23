@@ -1,0 +1,102 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+system: {'app': 'verbatim', 'version': '2026.11.23-4', 'pid': 3468, 'local': False, 'os': 'linux', 'device': 'cpu', 'gpu': None, 'note': '', 'ready': True, 'mock': False, 'loaded': None}
+{
+ "id": "c9c43899b1",
+ "status": "done",
+ "progress": 1.0,
+ "duration": 36.0,
+ "language": "zh",
+ "error": null,
+ "warning": null,
+ "rev": 1,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 8.0,
+   "text": "大家好 冰尖的工作方主要想清津各位對波人歹善的講法。",
+   "speaker": 0
+  },
+  {
+   "start": 8.0,
+   "end": 12.0,
+   "text": "我覺得哥爹小夏也登臺了晚上走路歸怕。",
+   "speaker": 1
+  },
+  {
+   "start": 12.0,
+   "end": 19.0,
+   "text": "得解那趙明是一一個一體 還有其他意見嗎？",
+   "speaker": 0
+  },
+  {
+   "start": 19.0,
+   "end": 25.0,
+   "text": "很多長輩希望做意見有正義的座椅可以坐下來休息。",
+   "speaker": 2
+  },
+  {
+   "start": 25.0,
+   "end": 29.0,
+   "text": "因為最近學期的很快最好把舞蹈和車道鬆開。",
+   "speaker": 1
+  },
+  {
+   "start": 29.0,
+   "end": 35.0,
+   "text": "討伍們把這件意見寄下來，下一個輪再討論規證。",
+   "speaker": 0
+  }
+ ],
+ "full": true,
+ "ahead": 0
+}
+diag: {"version": "2026.11.23-4", "python": "3.11.15", "device": "cpu", "gpu": null, "note": "", "model": "small", "speaker_model": "ok", "packages": {"faster-whisper": "1.2.1", "ctranslate2": "4.9.0", "sherpa-onnx": "2.0.2", "nvidia-cublas-cu12": "12.9.3.13", "nvidia-cudnn-cu12": "9.28.1.4", "numpy": "2.4.6"}, "errors": [], "log_tail": []}
+proofread: {
+ "status": "done",
+ "done": 6,
+ "total": 6,
+ "error": null,
+ "result": [
+  {
+   "text": "大家好！冰尖的工作方主要想清津各位對波人歹善的講法。",
+   "para": false,
+   "changed": true
+  },
+  {
+   "text": "我覺得哥爹小夏也登臺了晚上走路歸怕。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "得解那趙明是一一個一體，還有其他意見嗎？",
+   "para": false,
+   "changed": true
+  },
+  {
+   "text": "很多長輩希望做意見有正義的座椅可以坐下來休息。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "因為最近學期的很快最好把舞蹈和車道鬆開。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "討伍們把這件意見寄下來，下一個輪再討論規證。",
+   "para": false,
+   "changed": false
+  }
+ ]
+}
+✅ 完成
+✅ 沒有警告
+✅ 有逐字稿
+✅ 繁體輸出
+✅ 內容大致正確
+✅ 沒有「壹」
+✅ 講者人數
+✅ 校對完成
+✅ 校對沒有掉句
+✅ 校對後仍是繁體
