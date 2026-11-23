@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.23-2"
+VERSION = "2026.11.23-3"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -15,13 +15,18 @@ MODEL_DIR = os.path.join(DATA_DIR, "models")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 MOCK = os.environ.get("VERBATIM_MOCK") == "1"
 FORCE_CPU = os.environ.get("VERBATIM_CPU") == "1"
+LOCAL = os.environ.get("VERBATIM_LOCAL") == "1"   # 在使用者自己的電腦上執行
 sys.path.insert(0, APP_DIR)
 
 
 def _preload_cuda12():
-    """CTranslate2 以檔名尋找 libcublas.so.12／libcudnn*.so.9。先把虛擬環境裡 nvidia-*-cu12 的函式庫載進行程，
-    就不必依賴 Colab 系統的 CUDA 版本或 LD_LIBRARY_PATH。"""
+    """CTranslate2 以檔名尋找 CUDA 12 的 cuBLAS／cuDNN。先把虛擬環境裡 nvidia-*-cu12 的函式庫載進行程，
+    就不必依賴系統安裝的 CUDA 版本或 LD_LIBRARY_PATH／PATH。"""
     import ctypes, glob, site
+    if sys.platform == "win32":
+        return _preload_cuda12_windows(site.getsitepackages())
+    if sys.platform == "darwin":
+        return
     files = []
     for sp in site.getsitepackages() + [site.getusersitepackages()]:
         for pat in ("nvidia/cuda_runtime/lib/*.so.12", "nvidia/cuda_nvrtc/lib/*.so.12",
@@ -32,6 +37,25 @@ def _preload_cuda12():
         left = [f for f in left if not _try_load(ctypes, f)]
         if not left:
             break
+
+
+def _preload_cuda12_windows(sps):
+    import ctypes, glob
+    dirs = []
+    for sp in sps:
+        dirs += glob.glob(os.path.join(sp, "nvidia", "*", "bin"))
+    for d in dirs:
+        try:
+            os.add_dll_directory(d)
+        except Exception:
+            pass
+    os.environ["PATH"] = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
+    for d in dirs:
+        for f in sorted(glob.glob(os.path.join(d, "*.dll")), key=lambda f: ("Lt" not in f, f)):
+            try:
+                ctypes.WinDLL(f)
+            except OSError:
+                pass
 
 
 def _try_load(ctypes, f):
@@ -47,14 +71,29 @@ if not MOCK:
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
 
 MODELS = {"large-v2": "large-v2", "large-v3": "large-v3", "turbo": "large-v3-turbo",
           "medium": "medium", "small": "small"}
 ZH_PROMPT = "以下是繁體中文的句子。"  # 引導語越短越不容易被 Whisper 混進逐字稿
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def cors(request, call_next):
+    """跨網域存取（網站在 github.io，引擎在 Colab 或本機）。
+    本機模式下 Chrome 會在預檢加上 Access-Control-Request-Private-Network，回應必須明確允許。"""
+    from fastapi.responses import Response
+    if request.method == "OPTIONS" and request.headers.get("origin"):
+        h = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+             "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+             "Access-Control-Max-Age": "600"}
+        if request.headers.get("access-control-request-private-network"):
+            h["Access-Control-Allow-Private-Network"] = "true"
+        return Response(status_code=204, headers=h)
+    resp = await call_next(request)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 jobs: dict = {}
 work_q: "queue.Queue[str]" = queue.Queue()
 _model = {"name": None, "obj": None}
@@ -70,7 +109,7 @@ def get_llm(status):
     with _llm_lock:
         if _llm["obj"] is None:
             import proofread
-            _llm["obj"] = proofread.load(MODEL_DIR, device_info()["device"] == "cuda", status, _preload_cuda12)
+            _llm["obj"] = proofread.load(MODEL_DIR, proofread.use_gpu(device_info()["device"]), status, _preload_cuda12)
         return _llm["obj"]
 
 
@@ -85,6 +124,8 @@ def device_info():
             except Exception:
                 n = 0
         _state["device"] = "cuda" if n > 0 else "cpu"
+        if n == 0 and sys.platform == "darwin":
+            _state["gpu"] = platform.machine()
         if n > 0:
             try:
                 import subprocess
@@ -386,7 +427,7 @@ def index():
 @app.get("/api/system")
 def system():
     s = device_info()
-    return {"app": "verbatim", "version": VERSION, "pid": os.getpid(), "device": s["device"], "gpu": s["gpu"], "note": s["note"],
+    return {"app": "verbatim", "version": VERSION, "pid": os.getpid(), "local": LOCAL, "os": sys.platform, "device": s["device"], "gpu": s["gpu"], "note": s["note"],
             "ready": s["ready"] or MOCK, "mock": MOCK,
             "loaded": next((k for k, v in MODELS.items() if v == _model["name"]), None)}
 
@@ -494,4 +535,6 @@ if __name__ == "__main__":
         preload(os.environ["VERBATIM_PRELOAD"])
     else:
         _state["ready"] = True
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), log_level="warning")
+    # 本機模式只聽 127.0.0.1：同一個網路上的其他電腦連不進來
+    host = os.environ.get("VERBATIM_HOST", "127.0.0.1" if LOCAL else "0.0.0.0")
+    uvicorn.run(app, host=host, port=int(os.environ.get("PORT", 8000)), log_level="warning")

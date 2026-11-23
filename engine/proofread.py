@@ -1,4 +1,5 @@
-"""AI 校對：用開源語言模型（Qwen3-8B，GGUF Q4_K_M，llama.cpp）在 Colab GPU 上修正錯字、標點、分段。
+"""AI 校對：用開源語言模型（Qwen3，GGUF Q4_K_M，llama.cpp）修正錯字、標點、分段。
+Colab／Apple 晶片 Mac 用 GPU 跑 8B；Windows 本機用 CPU 跑 4B。
 
 設計原則：
 - 只校對，不改寫：逐句編號送進模型、逐句取回，時間戳與講者不會跑掉。
@@ -7,11 +8,39 @@
 """
 import os, re, subprocess, sys, difflib, shutil
 
-LLM_WHEEL = ("https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.19-cu124/"
-             "llama_cpp_python-0.3.19-cp311-cp311-linux_x86_64.whl")
-LLM_EXTRAS = ["nvidia-cuda-runtime-cu12==12.9.79", "diskcache==5.6.3", "jinja2==3.1.6", "MarkupSafe==3.0.3"]
-MODEL_REPO = os.environ.get("VERBATIM_LLM_REPO", "Qwen/Qwen3-8B-GGUF")
-MODEL_FILE = os.environ.get("VERBATIM_LLM_FILE", "Qwen3-8B-Q4_K_M.gguf")
+import platform as _pf
+
+_REL = "https://github.com/abetlen/llama-cpp-python/releases/download"
+# 各平台的 llama-cpp-python 0.3.19 預先編譯版（同一版 llama.cpp）
+WHEELS = {
+    "linux": f"{_REL}/v0.3.19-cu124/llama_cpp_python-0.3.19-cp311-cp311-linux_x86_64.whl",   # Colab：CUDA 12
+    "win32": f"{_REL}/v0.3.19/llama_cpp_python-0.3.19-cp311-cp311-win_amd64.whl",           # Windows：CPU
+    "darwin": f"{_REL}/v0.3.19-metal/llama_cpp_python-0.3.19-cp311-cp311-macosx_11_0_arm64.whl",  # Apple 晶片：Metal
+}
+LLM_WHEEL = WHEELS["linux"]
+COMMON_EXTRAS = ["diskcache==5.6.3", "jinja2==3.1.6", "MarkupSafe==3.0.3"]
+# 有 GPU 加速的平台用 8B；只能用 CPU 的平台改用 4B，速度約快一倍
+_GPU_MODEL = ("Qwen/Qwen3-8B-GGUF", "Qwen3-8B-Q4_K_M.gguf")
+_CPU_MODEL = ("Qwen/Qwen3-4B-GGUF", "Qwen3-4B-Q4_K_M.gguf")
+
+
+def use_gpu(whisper_device):
+    if sys.platform == "darwin":
+        return _pf.machine() == "arm64"
+    return sys.platform == "linux" and whisper_device == "cuda"
+
+
+def model_for(gpu):
+    repo, fname = _GPU_MODEL if gpu else _CPU_MODEL
+    return os.environ.get("VERBATIM_LLM_REPO", repo), os.environ.get("VERBATIM_LLM_FILE", fname)
+
+
+def wheel_and_extras():
+    if sys.platform == "linux":
+        return WHEELS["linux"], COMMON_EXTRAS + ["nvidia-cuda-runtime-cu12==12.9.79"]
+    if sys.platform == "darwin" and _pf.machine() != "arm64":
+        raise LLMUnavailable("Intel 晶片的 Mac 目前不支援 AI 校對")
+    return WHEELS.get(sys.platform), COMMON_EXTRAS
 
 SYSTEM = (
     "你是專業的繁體中文（臺灣）逐字稿校對員。輸入是語音辨識產生的逐字稿，每行開頭有編號。\n"
@@ -38,9 +67,10 @@ def ensure_installed(status=lambda s: None):
     if os.environ.get("VERBATIM_LLM_NO_INSTALL") == "1":
         raise LLMUnavailable("校對模組未安裝")
     status("installing")
-    uv = shutil.which("uv")
+    wheel, extras = wheel_and_extras()
+    uv = os.environ.get("VERBATIM_UV") or shutil.which("uv")
     cmd = ([uv, "pip", "install", "-q", "--python", sys.executable] if uv else [sys.executable, "-m", "pip", "install", "-q"])
-    r = subprocess.run(cmd + [LLM_WHEEL] + LLM_EXTRAS, capture_output=True, text=True)
+    r = subprocess.run(cmd + [wheel] + extras, capture_output=True, text=True)
     if r.returncode != 0:
         raise LLMUnavailable("校對模組安裝失敗：" + (r.stderr or r.stdout).strip()[-300:])
 
@@ -51,7 +81,8 @@ def load(model_dir, use_gpu, status=lambda s: None, preload_cuda=None):
         preload_cuda()  # 讓新裝的 libcudart.so.12 也先載進行程
     status("downloading")
     from huggingface_hub import hf_hub_download
-    path = hf_hub_download(MODEL_REPO, MODEL_FILE, cache_dir=os.path.join(model_dir, "llm"))
+    repo, fname = model_for(use_gpu)
+    path = hf_hub_download(repo, fname, cache_dir=os.path.join(model_dir, "llm"))
     status("loading")
     from llama_cpp import Llama
     return Llama(model_path=path, n_gpu_layers=-1 if use_gpu else 0, n_ctx=8192, n_batch=512,

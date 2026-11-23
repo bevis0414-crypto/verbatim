@@ -1,8 +1,9 @@
-# 逐字 Verbatim 引擎依賴：全部固定版本，由 requirements.lock 鎖定所有間接依賴
+# 逐字 Verbatim 引擎依賴：全部固定版本。各平台由對應的 lock 檔鎖定所有間接依賴：
+#   requirements.lock（Linux／Colab）、requirements-win.lock（Windows）、requirements-mac.lock（Apple 晶片 Mac）
 faster-whisper==1.2.1
 ctranslate2==4.9.0
-nvidia-cublas-cu12>=12.4,<13
-nvidia-cudnn-cu12>=9.1,<10
+nvidia-cublas-cu12>=12.4,<13; sys_platform != 'darwin'
+nvidia-cudnn-cu12>=9.1,<10; sys_platform != 'darwin'
 sherpa-onnx==2.0.2
 opencc-python-reimplemented==0.1.7
 imageio-ffmpeg==0.8.1
