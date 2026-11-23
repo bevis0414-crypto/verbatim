@@ -1,0 +1,2 @@
+# Windows 批次檔要保留 CRLF，否則 goto 標籤可能找不到
+*.bat -text

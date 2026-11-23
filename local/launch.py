@@ -40,7 +40,8 @@ def say(msg):
 
 
 def uv_exe():
-    for c in (os.environ.get("VERBATIM_UV"), os.path.join(ROOT, "uv", "uv.exe" if WIN else "uv"), shutil.which("uv")):
+    exe = "uv.exe" if WIN else "uv"
+    for c in (os.environ.get("VERBATIM_UV"), os.path.join(ROOT, "uv", exe), os.path.join(ROOT, "uv", "bin", exe), shutil.which("uv")):
         if c and os.path.exists(c):
             return c
     raise SystemExit("找不到 uv，請重新執行安裝程式")

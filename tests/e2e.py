@@ -29,6 +29,15 @@ def call(path, fields=None, files=None, js=None):
     return json.load(urllib.request.urlopen(req, timeout=120))
 
 
+def similarity(a, b):
+    import difflib, re
+    strip = lambda s: re.sub(r"[\s，。？！、：；,.?!:;]", "", s)
+    a, b = strip(a), strip(b)
+    # 逐字稿可能重複或順序不同：用正確答案的每個字在結果裡出現的比例，和序列相似度取較大者
+    cover = sum(1 for ch in set(b) if ch in a) / max(1, len(set(b)))
+    return max(cover, difflib.SequenceMatcher(None, a, b).ratio())
+
+
 def main():
     env = dict(os.environ, PORT=str(PORT), VERBATIM_CPU=os.environ.get("VERBATIM_CPU", "1"))
     proc = subprocess.Popen([sys.executable, ENGINE], env=env)
@@ -68,7 +77,8 @@ def main():
             # 看字而不是看詞：要有繁體專用字、不能有簡體字（不受小模型聽錯詞影響）
             "繁體輸出": sum(ch in text for ch in "們這說個題點還見論開聽議對讓會時裡為後來") >= 3
                         and not any(ch in text for ch in "们这说个题点还见论开听议对让会时里为后"),
-            "內容大致正確": sum(k in text for k in ("工作坊", "公園", "照明", "座椅", "長輩", "意見", "討論", "車道")) >= 3,
+            # 跟正確答案比整體字元相似度（小模型＋合成語音會聽錯一些字，只確認大致聽對）
+            "內容大致正確": similarity(text, "".join(t["text"] for t in truth)) >= 0.45,
             "沒有「壹」": "壹" not in text,
             "講者人數": n_spk == len({t["speaker"] for t in truth}),
         }

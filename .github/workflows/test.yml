@@ -75,12 +75,18 @@ jobs:
 
       - name: 執行安裝程式（Windows：install.bat）
         if: runner.os == 'Windows'
-        shell: cmd
-        run: call local\install.bat --no-browser
+        shell: bash
+        run: |
+          mkdir -p ci-log
+          cmd //c "local\\install.bat --no-browser" > ci-log/install.txt 2>&1; rc=$?
+          cat ci-log/install.txt; exit $rc
 
       - name: 執行安裝程式（Mac：install.sh）
         if: runner.os == 'macOS'
-        run: sh local/install.sh --no-browser
+        run: |
+          mkdir -p ci-log
+          set -o pipefail
+          sh local/install.sh --no-browser 2>&1 | tee ci-log/install.txt
 
       - name: 確認引擎在背景待命、只聽本機、已設定開機啟動
         shell: bash
@@ -124,7 +130,11 @@ jobs:
         if: always()
         shell: bash
         run: |
-          mkdir -p ci-log && cd ci-log && git init -q && git checkout -q -b "ci-logs-${{ runner.os }}"
+          mkdir -p ci-log
+          if [ "$RUNNER_OS" = "Windows" ]; then R="$LOCALAPPDATA/Verbatim"; else R="$HOME/Library/Application Support/Verbatim"; fi
+          cp "$R/launcher.log" ci-log/ 2>/dev/null || true; cp "$R/engine.log" ci-log/ 2>/dev/null || true
+          ls -la "$R" "$R/uv" > ci-log/files.txt 2>&1 || true
+          cd ci-log && git init -q && git checkout -q -b "ci-logs-${{ runner.os }}"
           echo "${{ github.sha }} ${{ job.status }} $(date -u +%FT%TZ)" > RESULT.txt
           git add -A && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "log ${{ github.sha }}"
           git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" "ci-logs-${{ runner.os }}"
