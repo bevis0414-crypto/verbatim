@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.23-1"
+VERSION = "2026.11.23-2"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -114,7 +114,7 @@ def _get_model(key):
     dev = device_info()["device"]
     try:
         m = WhisperModel(name, device=dev, compute_type="float16" if dev == "cuda" else "int8",
-                         download_root=os.path.join(MODEL_DIR, "whisper"))
+                         cpu_threads=_cpu_threads(), download_root=os.path.join(MODEL_DIR, "whisper"))
         if dev == "cuda":  # 試跑一秒空白音訊，確認 GPU 函式庫真的可用
             list(m.transcribe(np.zeros(16000, np.float32), language="en")[0])
     except Exception as e:
@@ -122,12 +122,18 @@ def _get_model(key):
             raise
         log_error("GPU 試跑失敗", e)
         _state["device"], _state["note"] = "cpu", f"GPU 無法使用，暫時改用 CPU（會很慢）。原因：{short(e)}"
-        m = WhisperModel(name, device="cpu", compute_type="int8", download_root=os.path.join(MODEL_DIR, "whisper"))
+        m = WhisperModel(name, device="cpu", compute_type="int8", cpu_threads=_cpu_threads(),
+                         download_root=os.path.join(MODEL_DIR, "whisper"))
     _model.update(name=name, obj=m)
     return m
 
 
 _emb_lock = threading.Lock()
+
+
+def _cpu_threads():
+    """CPU 轉錄時保留一顆核心給網路請求，避免引擎忙到回應不了網站（被誤判為斷線）"""
+    return max(1, (os.cpu_count() or 2) - 1)
 
 
 def get_embedder():

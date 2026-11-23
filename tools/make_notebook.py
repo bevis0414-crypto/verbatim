@@ -34,9 +34,11 @@ def alive(url):
         return None
 
 # ① GPU
-if subprocess.run("nvidia-smi", shell=True, capture_output=True).returncode != 0:
+HAS_GPU = subprocess.run("nvidia-smi", shell=True, capture_output=True).returncode == 0
+PRELOAD = "large-v2" if HAS_GPU else "small"
+if not HAS_GPU:
     say("⚠️ 這次沒有分到 GPU，轉錄會非常慢。請到上方選單「執行階段 → 變更執行階段類型」選 T4 GPU 後再按一次 Ctrl+F9；"
-        "如果選不到，可能是今天的免費額度用完了，可以晚一點再試。", "#ff5a1f")
+        "如果選不到，可能是今天的免費額度用完了，可以晚一點再試。也可以先用 CPU 轉錄，網站上請選 Small 或 Medium 模型。", "#ff5a1f")
 
 # ② 下載引擎（只用通過自動測試的 stable 版本）
 say("① 下載轉錄引擎…")
@@ -55,7 +57,7 @@ with tarfile.open(fileobj=io.BytesIO(src[1])) as t:
         parts = m.name.split("/", 1)
         if len(parts) == 2 and parts[1].startswith("engine/") and m.isfile():
             m.name = parts[1]
-            t.extract(m, ROOT)
+            t.extract(m, ROOT, filter="data") if hasattr(tarfile, "data_filter") else t.extract(m, ROOT)
 
 # ③ 固定版本的獨立環境：Python 3.11 + requirements.lock，不使用 Colab 內建套件
 say("② 準備執行環境（第一次約 1–2 分鐘）…")
@@ -76,14 +78,14 @@ if not (os.path.exists(stamp) and open(stamp).read() == want):
 # ④ 啟動引擎（重新執行時先關掉舊的引擎和看守員）
 if globals().get("_verbatim_stop"):
     _verbatim_stop.set()
-say("③ 啟動引擎並載入 Large v2 模型（第一次約 1–2 分鐘）…")
+say(f"③ 啟動引擎並載入 {'Large v2' if HAS_GPU else 'Small'} 模型（第一次約 1–2 分鐘）…")
 subprocess.run(f"pkill -f '^[^ ]*python[^ ]* {ROOT}/(engine/)?server[.]py'; fuser -k 8000/tcp", shell=True, capture_output=True)
 for _ in range(10):
     if not alive("http://localhost:8000"): break
     time.sleep(1)
 want_ver = re.search(r'VERSION = "([^"]+)"', open(f"{ROOT}/engine/server.py").read()).group(1)
 
-def start_engine(preload="large-v2"):
+def start_engine(preload=PRELOAD):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "LD_LIBRARY_PATH"))}
     env.update(PORT="8000", VERBATIM_PRELOAD=preload, VERBATIM_DATA=ROOT)
     return subprocess.Popen([f"{ROOT}/venv/bin/python", f"{ROOT}/engine/server.py"], env=env, cwd=ROOT,
@@ -206,7 +208,7 @@ def watchdog(stop):
             handle.update(render())
 
 def _model_hint():
-    return "large-v2"
+    return PRELOAD
 
 threading.Thread(target=watchdog, args=(_verbatim_stop,), daemon=True).start()
 '''

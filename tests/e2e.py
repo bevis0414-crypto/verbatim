@@ -65,7 +65,9 @@ def main():
             "完成": j["status"] == "done",
             "沒有警告": not j["warning"],
             "有逐字稿": len(segs) >= 4,
-            "繁體輸出": "園" in text or "說" in text or "長輩" in text,
+            # 看字而不是看詞：要有繁體專用字、不能有簡體字（不受小模型聽錯詞影響）
+            "繁體輸出": sum(ch in text for ch in "們這說個題點還見論開聽議對讓會時裡為後來") >= 3
+                        and not any(ch in text for ch in "们这说个题点还见论开听议对让会时里为后"),
             "內容大致正確": sum(k in text for k in ("工作坊", "公園", "照明", "座椅", "長輩", "意見", "討論", "車道")) >= 3,
             "沒有「壹」": "壹" not in text,
             "講者人數": n_spk == len({t["speaker"] for t in truth}),

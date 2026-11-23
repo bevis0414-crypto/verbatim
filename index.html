@@ -232,6 +232,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
   <aside>
     <div class="card">
       <h2>轉錄模型</h2>
+      <p class="note" id="cpuNote" hidden style="color:var(--acc);margin:0 0 10px">這次 Colab 沒有分到 GPU，用 CPU 轉錄。建議選 Small 或 Medium，Large 在 CPU 上轉 1 小時錄音可能要好幾個小時。</p>
       <div class="models" id="models"></div>
     </div>
     <div class="card">
@@ -331,10 +332,16 @@ const savePrefs = () => store.set('prefs', {model:S.model, lang:$('lang').value,
 
 const pips = n => `<span class="pips">${[1,2,3,4].map(i => `<i class="${i<=n?'f':''}"></i>`).join('')}</span>`;
 function renderModels() {
-  const busy = S.status === 'run';
+  const busy = S.status === 'run', cpu = S.sys && !S.sys.mock && S.sys.device === 'cpu';
   $('models').innerHTML = MODELS.map(m => `<button class="mdl${S.model===m.key?' on':''}" data-k="${m.key}" ${busy?'disabled':''}>
-    <b>${m.name}</b>${S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : ''}<p>${m.desc}</p>
+    <b>${m.name}</b>${S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : cpu && m.acc >= 4 ? '<span class="tag" style="color:var(--acc)">沒有 GPU 時很慢</span>' : ''}<p>${m.desc}</p>
     <span class="meters"><span>準確度 ${pips(m.acc)}</span><span>速度 ${pips(m.spd)}</span></span></button>`).join('');
+}
+function cpuHint() {
+  const cpu = S.sys && !S.sys.mock && S.sys.device === 'cpu';
+  $('cpuNote').hidden = !cpu;
+  if (cpu && !S.cpuWarned) { S.cpuWarned = true; if (MODELS.find(m => m.key === S.model)?.acc >= 4) { S.model = 'small'; renderModels(); }
+    toast('這次 Colab 沒有分到 GPU，已改選 Small 模型（可以自己改回來）'); }
 }
 $('models').addEventListener('click', e => { const b = e.target.closest('.mdl'); if (!b || b.disabled) return; S.model = b.dataset.k; savePrefs(); renderModels(); });
 
@@ -362,7 +369,7 @@ async function connect(url, quiet) {
     const s = await (await fetch(url + '/api/system', {signal: ctl.signal})).json();
     if (s.app !== 'verbatim') throw 0;
     S.server = url; S.sys = s; store.set('server', url);
-    setChip(true); renderModels();
+    setChip(true); renderModels(); cpuHint();
     if (document.body.dataset.v === 'connect') view(S.file ? 'file' : 'drop');
     if (engineOld()) toast('Colab 上的引擎是舊版，請在 Colab 重新整理頁面後按 Ctrl+F9 更新（這頁的逐字稿會保留）');
     else if (s.note) toast(s.note);
