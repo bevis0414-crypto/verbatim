@@ -268,7 +268,14 @@ def start_background_detached():
         os.remove(STOPFILE)
     cmd = background_cmd()
     if WIN:
-        subprocess.Popen(cmd, creationflags=0x00000008 | 0x00000200 | 0x08000000, close_fds=True)  # DETACHED|NEW_GROUP|NO_WINDOW
+        # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW，再加上 CREATE_BREAKAWAY_FROM_JOB：
+        # 安裝視窗所在的「工作群組」關閉時（例如某些終端機程式），背景引擎才不會被一起關掉。
+        # 有些環境不允許脫離群組，那就退回不脫離的方式。
+        base = 0x00000008 | 0x00000200 | 0x08000000
+        try:
+            subprocess.Popen(cmd, creationflags=base | 0x01000000, close_fds=True)
+        except OSError:
+            subprocess.Popen(cmd, creationflags=base, close_fds=True)
     else:
         subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
