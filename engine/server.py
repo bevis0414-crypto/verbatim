@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.20-7"
+VERSION = "2026.11.23-1"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -380,7 +380,7 @@ def index():
 @app.get("/api/system")
 def system():
     s = device_info()
-    return {"app": "verbatim", "version": VERSION, "device": s["device"], "gpu": s["gpu"], "note": s["note"],
+    return {"app": "verbatim", "version": VERSION, "pid": os.getpid(), "device": s["device"], "gpu": s["gpu"], "note": s["note"],
             "ready": s["ready"] or MOCK, "mock": MOCK,
             "loaded": next((k for k, v in MODELS.items() if v == _model["name"]), None)}
 
@@ -398,7 +398,15 @@ def diag():
     s = device_info()
     return {"version": VERSION, "python": platform.python_version(), "device": s["device"], "gpu": s["gpu"],
             "note": s["note"], "model": _model["name"], "speaker_model": "ok" if _emb["obj"] else _emb["err"],
-            "packages": pk, "errors": list(_errors)}
+            "packages": pk, "errors": list(_errors), "log_tail": _log_tail()}
+
+
+def _log_tail(n=25):
+    try:
+        lines = open(os.path.join(DATA_DIR, "engine.log"), errors="ignore").read().splitlines()
+        return [l[:300] for l in lines if l.strip()][-n:]
+    except Exception:
+        return []
 
 
 # 分段上傳：Cloudflare 免費通道單次請求上限 100 MB，前端把檔案切成 40 MB 一段送

@@ -15,6 +15,7 @@
 :root{color-scheme:dark;--bg:#0d0e11;--p1:#15171b;--p2:#1c1f24;--p3:#262a30;--line:#2a2d34;
   --ink:#eceae4;--mute:#8b9098;--acc:#ff5a1f;--accSoft:#ff5a1f1c;--ok:#35b26c}
 *{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Noto Sans TC",system-ui,sans-serif;overflow-x:clip}
 button,select,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -340,7 +341,16 @@ $('models').addEventListener('click', e => { const b = e.target.closest('.mdl');
 /* ---------- 連線 ---------- */
 $('openColab').href = COLAB;
 $('openColab').addEventListener('click', () => { $('waiting').classList.add('show'); $('st1').classList.remove('now'); $('st2').classList.add('now'); });
-const api = (path, opt) => fetch(S.server + path, opt).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status)); return r.json(); });
+S.netLog = [];
+function netErr(where, e) { S.netLog.push(`${new Date().toLocaleTimeString('zh-TW')} ${where}：${e.message || e}`); if (S.netLog.length > 12) S.netLog.shift(); }
+function api(path, opt = {}, server = S.server) {
+  if (!server) return Promise.reject(new Error('尚未連線'));
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), opt.timeout || 25000);
+  return fetch(server + path, {...opt, signal: ctl.signal})
+    .then(async r => { if (!r.ok) { const e = new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status)); e.http = r.status; throw e; } return r.json(); })
+    .catch(e => { throw e.name === 'AbortError' ? new Error('逾時沒有回應') : e; })
+    .finally(() => clearTimeout(timer));
+}
 const MIN_ENGINE = '2026.11.20-6';  // 網站需要的最低引擎版本（AI 校對從這版開始）
 const verNum = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)-(\d+)$/); return m ? ((+m[1] * 100 + +m[2]) * 100 + +m[3]) * 1000 + +m[4] : 0; };
 const engineOld = () => S.sys && !S.sys.mock && verNum(S.sys.version) < verNum(MIN_ENGINE);
@@ -360,8 +370,8 @@ async function connect(url, quiet) {
   } catch { if (!quiet) toast('連不上，Colab 可能還在啟動或已經關閉'); return false; }
 }
 function setChip(on) {
-  $('cdot').className = 'dot ' + (on ? 'ok' : '');
-  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>${S.sys && S.sys.ready === false ? ' · 載入模型中' : ''}${engineOld() ? ' · <b style="color:var(--acc)">引擎需要更新</b>' : ''}` : '未連線';
+  $('cdot').className = 'dot ' + (on ? (S.offline ? 'run' : 'ok') : '');
+  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : 'CPU（請改用 GPU）')}</b>${S.sys && S.sys.ready === false ? ' · 載入模型中' : ''}${engineOld() ? ' · <b style="color:var(--acc)">引擎需要更新</b>' : ''}${S.offline ? ' · <b style="color:var(--acc)">連線中斷</b>' : ''}` : '未連線';
 }
 function disconnected() {
   if (!S.server) return;
@@ -376,7 +386,8 @@ $('manualUrl').addEventListener('keydown', e => { if (e.key === 'Enter') connect
 addEventListener('storage', e => { if (e.key !== 'verbatim:server' || !e.newValue) return; const u = JSON.parse(e.newValue);
   if (u && u !== S.server) connect(u, true).then(ok => ok && S.segs.length && toast('已連上新的 Colab 引擎，逐字稿都還在')); });
 setInterval(async () => {
-  if (S.server) { try { S.sys = await api('/api/system'); setChip(true); renderModels(); } catch { disconnected(); } }
+  if (S.server) { try { S.sys = await api('/api/system', {timeout: 10000}); S.offline = false; setChip(true); renderModels(); }
+    catch (e) { netErr('連線檢查', e); if (S.status === 'run' || S.proof) { S.offline = true; setChip(true); } else disconnected(); } }
   else if (document.body.dataset.v === 'connect' && $('waiting').classList.contains('show')) { const u = store.get('server'); if (u) connect(u, true); }
 }, 15000);
 async function fromHash() {
@@ -593,7 +604,7 @@ $('go').addEventListener('click', async () => {
       hint:$('hint').value, speakers:$('spk').value}).forEach(([k, v]) => fd.append(k, v));
     const r = await api('/api/transcribe', {method:'POST', body:fd});
     if (S.file !== f) return;
-    S.job = r.id; setStatus('run', '排隊中…'); poll(f);
+    S.job = r.id; S.jobServer = S.server; S.fails = 0; S.failSince = 0; S.lastOk = Date.now(); setStatus('run', '排隊中…'); poll(f);
   } catch (e) { if (S.file === f) finish('', e.message === '已取消' ? '已停止' : e.message, true); }
 });
 function finish(kind, msg, isErr) {
@@ -602,19 +613,22 @@ function finish(kind, msg, isErr) {
   if (isErr) { S.lastError = msg; $('diagBtn').hidden = false; }
 }
 $('diagBtn').addEventListener('click', async () => {
-  let d = null; try { d = await api('/api/diag'); } catch {}
+  let d = null; try { d = await api('/api/diag', {timeout: 10000}, S.jobServer || S.server); } catch {}
   const info = ['【逐字 Verbatim 錯誤回報】', '時間：' + new Date().toLocaleString('zh-TW'), '錯誤：' + (S.lastError || ''),
     '檔案：' + (S.file ? `${S.file.name}（${mb(S.file.size)}，${S.file.type || '未知格式'}）` : '—'),
     '模型：' + S.model + '　講者：' + $('spk').value + '　語言：' + ($('lang').value || '自動'),
-    '瀏覽器：' + navigator.userAgent, '引擎：' + (d ? JSON.stringify(d) : '（無法連線到 Colab）')].join('\n');
+    '瀏覽器：' + navigator.userAgent, '連線網址：' + (S.jobServer || S.server || '—'), '網路紀錄：' + (S.netLog.join(' | ') || '無'),
+    '引擎：' + (d ? JSON.stringify(d) : '（無法連線到 Colab）')].join('\n');
   try { await navigator.clipboard.writeText(info); } catch { const t = document.createElement('textarea'); t.value = info; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
   toast('已複製，貼給網站管理者就可以了');
 });
 async function poll(f) {
   if (S.file !== f) return;
   try {
-    const j = await api(`/api/jobs/${S.job}?since=${S.segs.length}&rev=${S.rev}`);
+    const j = await api(`/api/jobs/${S.job}?since=${S.segs.length}&rev=${S.rev}`, {timeout: 10000}, S.jobServer);
     if (S.file !== f) return;
+    S.lastOk = Date.now();
+    if (S.fails) { S.fails = 0; S.failSince = 0; S.offline = false; setChip(true); $('diagBtn').hidden = true; toast('已重新連上 Colab，繼續轉錄'); }
     if (j.full) { S.segs = j.segments; S.rev = j.rev; renderAll(); }
     else if (j.segments.length) { const from = S.segs.length; S.segs.push(...j.segments); renderAll(from); }
     const lang = LANGS[j.language] ? ' · ' + LANGS[j.language] : '';
@@ -627,10 +641,25 @@ async function poll(f) {
     else if (j.status === 'cancelled') return finish('', '已停止');
     else if (j.status === 'error') return finish('', '轉錄失敗：' + (j.error || '未知錯誤'), true);
   } catch (e) {
-    if (/找不到/.test(e.message)) return finish('', e.message, true);
-    setStatus('run', '連線不穩，重試中…');
+    if (S.file !== f) return;
+    if (e.http === 404) return finish('', 'Colab 引擎重新啟動過，這個工作已中斷。逐字稿已轉好的部分還在，請再按一次「重新轉錄」。', true);
+    netErr('轉錄進度', e);
+    S.fails++; S.failSince = S.failSince || S.lastOk || Date.now();  // 從最後一次成功連上開始算
+    const sec = Math.round((Date.now() - S.failSince) / 1000);
+    if (sec < 20) setStatus('run', '連線不穩，重試中…');
+    else {
+      let why = '';
+      try { await api('/api/system', {timeout: 6000}, S.jobServer); why = '引擎有回應，但讀不到進度，繼續重試中…'; }
+      catch { why = 'Colab 沒有回應'; }
+      S.offline = true; setChip(true);
+      S.lastError = `轉錄途中和 Colab 失去連線（已持續 ${sec} 秒）：${why}`;
+      $('diagBtn').hidden = false;
+      setStatus('run', `和 Colab 失去連線 ${fmt(sec)}，恢復後會自動接續`);
+      if (sec >= 20 && sec < 25) toast('連不到 Colab：請確認 Colab 分頁還開著、沒有出現「已中斷連線」。Colab 恢復後這裡會自動接續，不用重新上傳。');
+      if (sec > 900) return finish('', '和 Colab 失去連線超過 15 分鐘，已停止等待。請到 Colab 看看是否已中斷，重新啟動後再轉錄一次。', true);
+    }
   }
-  S.timer = setTimeout(() => poll(f), 1200);
+  S.timer = setTimeout(() => poll(f), S.fails ? 3000 : 1200);
 }
 addEventListener('beforeunload', e => { if (S.status === 'run' || S.segs.length) e.preventDefault(); });
 
@@ -711,10 +740,20 @@ async function startProof() {
   try {
     const r = await api('/api/proofread', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({segments: sent.map(text => ({text})), hint: $('hint').value, trad: $('trad').checked})});
+    const srv = S.server; let failSince = 0;
     while (true) {
-      await new Promise(ok => setTimeout(ok, 1500));
+      await new Promise(ok => setTimeout(ok, failSince ? 3000 : 1500));
       if (S.file !== file) return;
-      const j = await api('/api/proofread/' + r.id);
+      let j;
+      try { j = await api('/api/proofread/' + r.id, {timeout: 10000}, srv); if (failSince) { failSince = 0; S.offline = false; setChip(true); } }
+      catch (e) {
+        if (e.http === 404) throw new Error('Colab 引擎重新啟動過，校對已中斷，請再按一次「AI 校對」');
+        netErr('校對進度', e); failSince = failSince || Date.now();
+        const sec = Math.round((Date.now() - failSince) / 1000);
+        if (sec > 900) throw new Error('和 Colab 失去連線超過 15 分鐘');
+        if (sec > 20) { S.offline = true; setChip(true); setStatus('run', `和 Colab 失去連線 ${fmt(sec)}，恢復後會自動接續`); }
+        continue;
+      }
       if (j.status === 'proofreading') setStatus('run', `AI 校對中 ${Math.round(j.done / j.total * 100)}%`, j.done / j.total);
       else if (PSTAT[j.status]) setStatus('run', PSTAT[j.status], 0);
       else if (j.status === 'error') throw new Error(j.error || '校對失敗');

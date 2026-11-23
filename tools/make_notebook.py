@@ -73,24 +73,38 @@ if not (os.path.exists(stamp) and open(stamp).read() == want):
             fail("執行環境安裝失敗", "<pre style='white-space:pre-wrap;font-size:12px'>" + (r.stderr or r.stdout)[-1500:] + "</pre>")
     open(stamp, "w").write(want)
 
-# ④ 啟動引擎（重新執行時先關掉舊的）
+# ④ 啟動引擎（重新執行時先關掉舊的引擎和看守員）
+if globals().get("_verbatim_stop"):
+    _verbatim_stop.set()
 say("③ 啟動引擎並載入 Large v2 模型（第一次約 1–2 分鐘）…")
-# 關掉任何佔用 8000 埠的舊引擎（包含更早版本放在不同路徑的引擎）
-subprocess.run("pkill -f 'verbatim/.*server.py'; fuser -k 8000/tcp", shell=True, capture_output=True)
+subprocess.run(f"pkill -f '^[^ ]*python[^ ]* {ROOT}/(engine/)?server[.]py'; fuser -k 8000/tcp", shell=True, capture_output=True)
 for _ in range(10):
     if not alive("http://localhost:8000"): break
     time.sleep(1)
 want_ver = re.search(r'VERSION = "([^"]+)"', open(f"{ROOT}/engine/server.py").read()).group(1)
-env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "LD_LIBRARY_PATH"))}
-env.update(PORT="8000", VERBATIM_PRELOAD="large-v2", VERBATIM_DATA=ROOT)
-log = open(f"{ROOT}/engine.log", "w")
-subprocess.Popen([f"{ROOT}/venv/bin/python", f"{ROOT}/engine/server.py"], env=env, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
-st = None
-for _ in range(480):
-    st = alive("http://localhost:8000")
-    if st and st.get("ready"):
-        break
-    time.sleep(1)
+
+def start_engine(preload="large-v2"):
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "LD_LIBRARY_PATH"))}
+    env.update(PORT="8000", VERBATIM_PRELOAD=preload, VERBATIM_DATA=ROOT)
+    return subprocess.Popen([f"{ROOT}/venv/bin/python", f"{ROOT}/engine/server.py"], env=env, cwd=ROOT,
+                            stdout=open(f"{ROOT}/engine.log", "w"), stderr=subprocess.STDOUT)
+
+def wait_ready(proc, limit=480):
+    """等引擎準備好；引擎程序先結束（例如啟動失敗）就立刻回傳 None"""
+    for _ in range(limit):
+        if proc.poll() is not None:
+            return None
+        st = alive("http://localhost:8000")
+        if st and st.get("ready") and st.get("pid") in (None, proc.pid):
+            return st
+        time.sleep(1)
+    return alive("http://localhost:8000")
+
+engine = start_engine()
+st = wait_ready(engine)
+other = alive("http://localhost:8000")
+if not st and other and other.get("pid") != engine.pid:  # 舊引擎還佔著 8000 埠
+    fail("舊版引擎還佔著位置", "請從上方選單「執行階段 → 中斷連線並刪除執行階段」，再按一次 Ctrl+F9。")
 if st and st.get("version") != want_ver:
     fail("舊版引擎沒有關掉", f"目前執行的是 {st.get('version', '舊版')}，應該是 {want_ver}。請從上方選單「執行階段 → 中斷連線並刪除執行階段」，再按一次 Ctrl+F9。")
 if not st:
@@ -98,36 +112,103 @@ if not st:
 
 # ⑤ 對外連線網址（Cloudflare 免費通道，固定版本）
 say("④ 建立連線網址…")
-url = globals().get("_verbatim_url")
-if not (url and alive(url)):
+if not os.path.exists(f"{ROOT}/cloudflared"):
+    urllib.request.urlretrieve(CLOUDFLARED, f"{ROOT}/cloudflared")
+    os.chmod(f"{ROOT}/cloudflared", 0o755)
+
+def start_tunnel():
     subprocess.run("pkill -f cloudflared", shell=True)
-    if not os.path.exists(f"{ROOT}/cloudflared"):
-        urllib.request.urlretrieve(CLOUDFLARED, f"{ROOT}/cloudflared")
-        os.chmod(f"{ROOT}/cloudflared", 0o755)
-    proc = subprocess.Popen([f"{ROOT}/cloudflared", "tunnel", "--no-autoupdate", "--url", "http://localhost:8000"],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    url, t0 = None, time.time()
-    for line in proc.stdout:
+    p = subprocess.Popen([f"{ROOT}/cloudflared", "tunnel", "--no-autoupdate", "--url", "http://localhost:8000"],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    u, t0 = None, time.time()
+    for line in p.stdout:
         m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
         if m:
-            url = m.group(0); break
+            u = m.group(0); break
         if time.time() - t0 > 90:
             break
+    threading.Thread(target=lambda: [None for _ in p.stdout], daemon=True).start()
+    for _ in range(30):
+        if u and alive(u): break
+        time.sleep(2)
+    return p, u
+
+url, tunnel = globals().get("_verbatim_url"), globals().get("_verbatim_tunnel")
+if not (url and alive(url)):
+    tunnel, url = start_tunnel()
     if not url:
         fail("建立連線網址失敗", "Cloudflare 暫時沒有回應，請再按一次 Ctrl+F9。")
-    threading.Thread(target=lambda: [None for _ in proc.stdout], daemon=True).start()
-    for _ in range(30):
-        if alive(url): break
-        time.sleep(2)
-    _verbatim_url = url
+_verbatim_url, _verbatim_tunnel = url, tunnel
 
+# ⑥ 卡片＋看守員：引擎當掉自動重啟、連線通道斷了自動重建，狀況都顯示在卡片上
 clear_output()
-dev = f"GPU {st.get('gpu') or ''}" if st.get("device") == "cuda" else "CPU（會很慢）"
-warn = f'<div style="color:#ff5a1f;margin-top:12px">⚠️ {st["note"]}</div>' if st.get("note") else ""
-card("✅ 轉錄引擎已啟動",
-     f"點下面的按鈕回到逐字網站。<b style='color:#eceae4'>這個 Colab 分頁請保持開著</b>，關掉後網站就會斷線。{warn}"
-     f"<div style='color:#8b9098;font-size:13px;margin-top:14px'>引擎版本 {st.get('version')}（{src[0]}）· {dev} · {url}</div>",
-     button=("回到逐字網站 ↗", SITE + "#server=" + url))
+events = []
+
+def render():
+    dev = f"GPU {st.get('gpu') or ''}" if st.get("device") == "cuda" else "CPU（會很慢）"
+    warn = f'<div style="color:#ff5a1f;margin-top:12px">⚠️ {st["note"]}</div>' if st.get("note") else ""
+    ev = "".join(f'<div style="color:#f7c948;font-size:13px;margin-top:8px">{e}</div>' for e in events[-4:])
+    btn = (f'<a href="{SITE}#server={url}" target="_blank" style="display:inline-block;background:#ff5a1f;color:#fff;padding:14px 28px;'
+           f'border-radius:12px;font-size:17px;font-weight:600;text-decoration:none;margin-top:18px">回到逐字網站 ↗</a>')
+    return HTML(f'<div style="font-family:sans-serif;background:#15171b;color:#eceae4;border-radius:16px;padding:28px;max-width:680px">'
+                f'<div style="font-size:22px;font-weight:700;margin-bottom:8px">✅ 轉錄引擎已啟動</div>'
+                f'<div style="color:#b9bcc2;line-height:1.7">點下面的按鈕回到逐字網站。<b style="color:#eceae4">這個 Colab 分頁請保持開著</b>，'
+                f'關掉後網站就會斷線。引擎如果當掉會自動重新啟動，狀況會顯示在這裡。{warn}{ev}</div>{btn}'
+                f'<div style="color:#8b9098;font-size:13px;margin-top:14px">引擎版本 {st.get("version")}（{src[0]}）· {dev} · {url}</div></div>')
+
+handle = display(render(), display_id=True)
+_verbatim_stop = threading.Event()
+
+def watchdog(stop):
+    global engine, tunnel, url, st, _verbatim_url, _verbatim_tunnel
+    tunnel_bad, crashes = 0, []
+    while not stop.wait(5):
+        try:
+            if engine.poll() is not None and len([t for t in crashes if time.time() - t < 600]) >= 3:
+                if crashes[-1] != -1:  # 10 分鐘內當掉 3 次以上：停止自動重啟，請使用者回報
+                    tail = open(f"{ROOT}/engine.log", errors="ignore").read()[-800:]
+                    events.append("❌ 引擎在 10 分鐘內反覆停止，已暫停自動重啟。請把這個畫面截圖給網站管理者，"
+                                  "然後從「執行階段 → 中斷連線並刪除執行階段」重新開始。"
+                                  f"<pre style='white-space:pre-wrap;font-size:11px;color:#8b9098'>{tail}</pre>")
+                    handle.update(render())
+                    crashes.append(-1)
+                continue
+            if engine.poll() is not None:  # 引擎行程結束了
+                crashes.append(time.time())
+                code = engine.returncode
+                tail = open(f"{ROOT}/engine.log", errors="ignore").read()[-1500:]
+                ts = time.strftime("%H:%M")
+                n = len([e for e in events if "引擎" in e]) + 1
+                open(f"{ROOT}/engine-crash-{n}.log", "w").write(tail)
+                why = "可能是記憶體不足（RAM 用完）" if code in (-9, 137) else f"結束代碼 {code}"
+                events.append(f"⚠️ {ts} 引擎停止（{why}），已自動重新啟動。正在進行的轉錄需要重新上傳。")
+                handle.update(render())
+                engine = start_engine(preload=_model_hint())
+                s2 = wait_ready(engine, 300)
+                if s2:
+                    st = s2
+                    events.append(f"✓ {time.strftime('%H:%M')} 引擎已重新啟動完成")
+                    handle.update(render())
+            if tunnel.poll() is not None or not alive(url):
+                tunnel_bad += 1
+            else:
+                tunnel_bad = 0
+            if tunnel_bad >= 3:  # 連續 15 秒連不上自己的對外網址 → 重建通道
+                tunnel, new = start_tunnel()
+                if new:
+                    url = _verbatim_url = new
+                    _verbatim_tunnel = tunnel
+                    events.append(f"⚠️ {time.strftime('%H:%M')} 連線通道中斷，已換新網址。請點上面的按鈕重新連線（網站上的逐字稿會保留）。")
+                    handle.update(render())
+                tunnel_bad = 0
+        except Exception as e:
+            events.append(f"⚠️ 看守員錯誤：{e}")
+            handle.update(render())
+
+def _model_hint():
+    return "large-v2"
+
+threading.Thread(target=watchdog, args=(_verbatim_stop,), daemon=True).start()
 '''
 
 code = CODE.replace("__OWNER__", OWNER).replace("__REPO__", REPO)
