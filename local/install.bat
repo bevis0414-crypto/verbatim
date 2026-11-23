@@ -20,7 +20,8 @@ if errorlevel 1 goto dlfail
 goto run
 
 :copylaunch
-copy /y "%VERBATIM_LAUNCH_SRC%" "%VB%\launch.py" >nul
+set "SRC=%VERBATIM_LAUNCH_SRC:/=\%"
+copy /y "%SRC%" "%VB%\launch.py" >nul
 goto run
 
 :dlfail

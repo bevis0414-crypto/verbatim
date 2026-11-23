@@ -182,8 +182,18 @@ def copy_self():
     return dst
 
 
+def background_cmd():
+    """開機啟動／背景執行的指令。Windows 優先用 uvw.exe（不跳出視窗），由 uv 找 Python 3.11，不寫死 Python 路徑"""
+    launch = copy_self()
+    if WIN:
+        uvw = os.path.join(os.path.dirname(uv_exe()), "uvw.exe")
+        if os.path.exists(uvw):
+            return [uvw, "run", "--no-project", "--python", "3.11", launch, "--background"]
+    return [launcher_python(), launch, "--background"]
+
+
 def register_autostart():
-    cmd = [launcher_python(), copy_self(), "--background"]
+    cmd = background_cmd()
     if WIN:
         import winreg
         line = " ".join(f'"{c}"' for c in cmd)
@@ -256,7 +266,7 @@ def stop_engine():
 def start_background_detached():
     if os.path.exists(STOPFILE):
         os.remove(STOPFILE)
-    cmd = [launcher_python(), copy_self(), "--background"]
+    cmd = background_cmd()
     if WIN:
         subprocess.Popen(cmd, creationflags=0x00000008 | 0x00000200 | 0x08000000, close_fds=True)  # DETACHED|NEW_GROUP|NO_WINDOW
     else:
