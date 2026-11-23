@@ -131,12 +131,14 @@ def accept(old, new):
     return difflib.SequenceMatcher(None, a, b).ratio() >= 0.55
 
 
-def proofread(llm, texts, hint="", progress=lambda done: None, cancelled=lambda: False, post=lambda s: s):
+def proofread(llm, texts, hint="", progress=lambda done: None, cancelled=lambda: False, post=lambda s: s,
+              pause_wait=lambda: None):
     """回傳 [(校對後文字, 是否新段落, 是否有修改)]，長度與 texts 相同"""
     result = [(t, False, False) for t in texts]
     groups = chunks(texts)
     done = 0
     for gi, g in enumerate(groups):
+        pause_wait()
         if cancelled():
             break
         ctx = ""

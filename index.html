@@ -35,7 +35,8 @@ a{color:inherit}
 .btn.ghost{background:var(--p3)}.btn.ghost:hover{background:#30343b}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
-.dot.run{background:var(--acc);animation:pulse 1.2s infinite}.dot.ok{background:var(--ok)}
+.dot.run{background:var(--acc);animation:pulse 1.2s infinite}.dot.ok{background:var(--ok)}.dot.pz{background:#f7c948}
+#pause.on{background:#f7c94822;color:#f7c948;box-shadow:inset 0 0 0 1px #f7c94866}
 @keyframes pulse{50%{opacity:.3}}
 
 /* 連線面板 */
@@ -187,22 +188,8 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
   <section class="view v-connect">
     <div class="connect">
       <h1>選擇轉錄引擎</h1>
-      <p>轉錄要用一台電腦跑 AI 模型：可以用你自己的電腦，也可以用 Google Colab 的免費雲端 GPU。兩個都設定好的話，網站會優先用這台電腦。</p>
+      <p>轉錄要用 GPU 跑 AI 模型。平常用 Google Colab 的免費雲端 GPU；Colab 分不到 GPU 時，可以直接用這台電腦的顯示卡，不用安裝任何東西。</p>
       <div class="engines">
-        <div class="eng" id="engLocal">
-          <div class="engHead"><b>這台電腦</b><span>安裝一次，之後打開網站就自動連上</span></div>
-          <ul class="pros"><li>不用排隊搶 GPU，隨時可用</li><li>錄音完全不離開你的電腦</li><li>有 NVIDIA 顯示卡最快，沒有也能用</li></ul>
-          <div id="localInstall">
-            <a class="btn acc" id="dlWin" href="local/install.bat" download="逐字Verbatim安裝.bat" hidden>下載安裝程式（Windows）</a>
-            <div id="unixCmd" hidden><p class="note">打開「終端機」，貼上這一行後按 Enter：</p>
-              <div class="cmd"><code id="unixTxt"></code><button class="tb" id="copyCmd">複製</button></div></div>
-            <p class="note" id="winHint" hidden>下載後點兩下執行，等它跑完就好。若跳出「Windows 已保護您的電腦」，按「其他資訊 → 仍要執行」。</p>
-            <p class="note" id="mobileHint" hidden>手機不能安裝本機引擎，請在電腦上安裝，或改用 Colab。</p>
-          </div>
-          <div class="waiting" id="lwaiting"><span class="dot run"></span><span id="lwTxt">等待本機引擎…第一次安裝約 3–5 分鐘</span></div>
-          <div class="cRow" style="margin-top:12px"><button class="btn ghost" id="tryLocal">已經安裝了，連線</button></div>
-          <p class="note">第一次連線時，Chrome 會問是否允許存取「這台裝置上的其他應用程式和服務」，請按「允許」。</p>
-        </div>
         <div class="eng">
           <div class="engHead"><b>Google Colab</b><span>免費雲端 GPU，每次使用前啟動一次（約 2 分鐘）</span></div>
           <div class="steps">
@@ -214,6 +201,13 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
             <a class="btn acc" id="openColab" href="#" target="_blank" rel="noopener">啟動 Colab ↗</a>
             <div class="waiting" id="waiting"><span class="dot run"></span>等待 Colab 啟動中…請保持 Colab 分頁開著</div>
           </div>
+        </div>
+        <div class="eng" id="engBrowser">
+          <div class="engHead"><b>這台電腦的 GPU</b><span>不用安裝，直接在瀏覽器裡轉錄</span></div>
+          <ul class="pros"><li>不用排隊搶 GPU，隨時可用</li><li>錄音完全不離開你的電腦</li><li>可用 Large v3 Turbo、Small、Base 模型</li></ul>
+          <p class="note" style="margin:0 0 16px">沒有講者分辨和 AI 校對（要用這兩項請用 Colab）。第一次使用要下載模型，Turbo 約 1 GB，之後存在瀏覽器裡。需要電腦版 Chrome 或 Edge。</p>
+          <div class="cRow"><button class="btn acc" id="useBrowser">使用這台電腦的 GPU</button></div>
+          <p class="note" id="gpuMsg" style="color:var(--acc)"></p>
         </div>
       </div>
       <details class="manual">
@@ -238,6 +232,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
       <div class="fname" id="fname">—</div>
       <div class="fmeta num" id="fmeta"></div>
       <button class="btn ghost" id="change">換檔案</button>
+      <button class="btn ghost" id="pause" hidden>暫停</button>
       <button class="btn acc" id="go">開始轉錄</button>
       <button class="btn acc" id="dl" hidden>下載逐字稿 ▾</button>
     </div>
@@ -267,6 +262,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
   <aside>
     <div class="card">
       <h2>轉錄模型</h2>
+      <div id="cpuBox" hidden style="margin:0 0 12px"><button class="btn acc" id="switchWeb" style="width:100%">改用這台電腦的 GPU</button></div>
       <p class="note" id="cpuNote" hidden style="color:var(--acc);margin:0 0 10px">這次 Colab 沒有分到 GPU，用 CPU 轉錄。建議選 Small 或 Medium，Large 在 CPU 上轉 1 小時錄音可能要好幾個小時。</p>
       <div class="models" id="models"></div>
     </div>
@@ -285,7 +281,7 @@ dialog .dRow{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
           <option value="off">不區分</option><option value="auto">自動判斷人數</option>
           <option value="2">2 位講者</option><option value="3">3 位講者</option><option value="4">4 位講者</option><option value="5">5 位講者</option><option value="6">6 位講者</option>
         </select>
-        <p class="note">知道有幾個人說話時，直接指定人數會更準。</p>
+        <p class="note" id="spkNote">知道有幾個人說話時，直接指定人數會更準。</p>
       </div>
       <label class="sw field">輸出繁體中文（臺灣用語）<input type="checkbox" id="trad" checked></label>
       <div class="field" style="margin:0">
@@ -336,7 +332,19 @@ const MODELS = [
   {key:'medium', name:'Medium', desc:'中型，速度和準確度折衷。', acc:3, spd:3},
   {key:'small', name:'Small', desc:'最快，適合先試聽大概內容。', acc:2, spd:4},
 ];
+const WEB_MODELS = [   // 瀏覽器（WebGPU）可用的模型：transformers.js 的 ONNX 版本；dtypes 依序嘗試，載不進就換下一種
+  {key:'large-v2', repo:'Xenova/whisper-large-v2', name:'Large v2', desc:'你習慣的版本。檔案大（約 2 GB），需要獨立顯示卡；第一次載入較久。', acc:4, spd:1, big:true,
+   dtypes:[{encoder_model:'fp16', decoder_model_merged:'q4'}, {encoder_model:'q8', decoder_model_merged:'q8'}, 'q8']},
+  {key:'breeze', repo:'markno5/Breeze-ASR-25-ONNX', name:'Large v2 臺灣華語版（Breeze）', desc:'聯發科以 Large v2 為基礎，針對臺灣華語、中英夾雜優化。檔案大，需要獨立顯示卡。', acc:4, spd:1, big:true,
+   dtypes:['q8', {encoder_model:'fp16', decoder_model_merged:'q4'}]},
+  {key:'turbo', repo:'onnx-community/whisper-large-v3-turbo', name:'Large v3 Turbo', desc:'準確度接近 Large v2、速度快很多。第一次下載約 1 GB。', acc:4, spd:3, f16:true},
+  {key:'small', repo:'onnx-community/whisper-small', name:'Small', desc:'準確度與速度平衡。第一次下載約 250 MB。', acc:3, spd:3},
+  {key:'base', repo:'onnx-community/whisper-base', name:'Base', desc:'最快，適合先試聽大概內容。約 80 MB。', acc:2, spd:4},
+];
 const LANGS = {zh:'中文', en:'英文', ja:'日文', ko:'韓文'};
+const isWeb = () => S.mode === 'browser';
+const curModels = () => isWeb() ? WEB_MODELS : MODELS;
+const curKey = () => isWeb() ? S.webModel : S.model;
 const COLORS = ['#6ea8fe','#f7c948','#5fd3a6','#e88bd8','#a3a8ff','#ff9b6a','#7fd1e8','#c3e66e'];
 const S = {server:null, sys:null, file:null, peaks:null, dur:0, job:null, rev:0, segs:[], names:{}, status:'idle',
   progress:0, onIdx:-1, timer:null, model:'large-v2'};
@@ -358,9 +366,10 @@ $('deco').innerHTML = Array.from({length:70}, (_, i) => { const a = 6 + Math.abs
 /* ---------- 偏好 ---------- */
 const P = store.get('prefs', {});
 if (MODELS.some(m => m.key === P.model)) S.model = P.model;
+S.webModel = WEB_MODELS.some(m => m.key === P.webModel) ? P.webModel : 'large-v2';
 for (const [id, k] of [['lang','lang'],['spk','spk'],['hint','hint']]) if (P[k] !== undefined) $(id).value = P[k];
 for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge'],['showAi','showAi']]) if (P[k] !== undefined) $(id).checked = P[k];
-const savePrefs = () => store.set('prefs', {model:S.model, lang:$('lang').value, spk:$('spk').value, hint:$('hint').value,
+const savePrefs = () => store.set('prefs', {model:S.model, webModel:S.webModel, lang:$('lang').value, spk:$('spk').value, hint:$('hint').value,
   trad:$('trad').checked, showTs:$('showTs').checked, merge:$('merge').checked, showAi:$('showAi').checked});
 ['lang','spk','hint','trad'].forEach(id => $(id).addEventListener('change', savePrefs));
 ['showTs','merge','showAi'].forEach(id => $(id).addEventListener('change', () => { savePrefs(); renderAll(); }));
@@ -368,47 +377,49 @@ const savePrefs = () => store.set('prefs', {model:S.model, lang:$('lang').value,
 const pips = n => `<span class="pips">${[1,2,3,4].map(i => `<i class="${i<=n?'f':''}"></i>`).join('')}</span>`;
 function renderModels() {
   const busy = S.status === 'run', cpu = S.sys && !S.sys.mock && S.sys.device === 'cpu';
-  $('models').innerHTML = MODELS.map(m => `<button class="mdl${S.model===m.key?' on':''}" data-k="${m.key}" ${busy?'disabled':''}>
-    <b>${m.name}</b>${S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : cpu && m.acc >= 4 ? '<span class="tag" style="color:var(--acc)">沒有 GPU 時很慢</span>' : ''}<p>${m.desc}</p>
+  const tag = m => isWeb() ? (S.webFailed?.has(m.key) ? '<span class="tag" style="color:var(--acc)">這台電腦跑不動</span>' : S.webCached?.has(m.key) ? '<span class="tag ok">✓ 已下載</span>' : m.big ? '<span class="tag" style="color:#f7c948">檔案大</span>' : '<span class="tag">需下載</span>')
+    : S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : cpu && m.acc >= 4 ? '<span class="tag" style="color:var(--acc)">沒有 GPU 時很慢</span>' : '';
+  $('models').innerHTML = curModels().map(m => `<button class="mdl${curKey()===m.key?' on':''}" data-k="${m.key}" ${busy?'disabled':''}>
+    <b>${m.name}</b>${tag(m)}<p>${m.desc}</p>
     <span class="meters"><span>準確度 ${pips(m.acc)}</span><span>速度 ${pips(m.spd)}</span></span></button>`).join('');
 }
 function cpuHint() {
   const cpu = S.sys && !S.sys.mock && S.sys.device === 'cpu';
-  $('cpuNote').hidden = !cpu;
+  $('cpuNote').hidden = !cpu; $('cpuBox').hidden = !cpu || MOBILE;
   if (cpu && !S.cpuWarned) { S.cpuWarned = true; if (MODELS.find(m => m.key === S.model)?.acc >= 4) { S.model = 'small'; renderModels(); }
-    toast(S.sys.local ? '這台電腦沒有可用的 NVIDIA 顯示卡，用 CPU 轉錄，已改選 Small 模型（可以自己改回來）' : '這次 Colab 沒有分到 GPU，已改選 Small 模型（可以自己改回來）'); }
-  if (cpu) $('cpuNote').textContent = S.sys.local ? '這台電腦用 CPU 轉錄。建議選 Small 或 Medium，Large 在 CPU 上轉 1 小時錄音可能要好幾個小時。' : '這次 Colab 沒有分到 GPU，用 CPU 轉錄。建議選 Small 或 Medium，Large 在 CPU 上轉 1 小時錄音可能要好幾個小時。';
+    toast('這次 Colab 沒有分到 GPU，已改選 Small。也可以按右邊「改用這台電腦的 GPU」。'); }
+  if (cpu) $('cpuNote').textContent = '這次 Colab 沒有分到 GPU，用 CPU 轉錄會很慢。建議改用這台電腦的 GPU，或在 Colab 選 Small、Medium。';
 }
-$('models').addEventListener('click', e => { const b = e.target.closest('.mdl'); if (!b || b.disabled) return; S.model = b.dataset.k; savePrefs(); renderModels(); });
+$('models').addEventListener('click', e => { const b = e.target.closest('.mdl'); if (!b || b.disabled) return; if (isWeb()) S.webModel = b.dataset.k; else S.model = b.dataset.k; savePrefs(); renderModels(); });
+
+/* ---------- 引擎模式：Colab（伺服器）或這台電腦的 GPU（瀏覽器） ---------- */
+const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || navigator.userAgentData?.mobile;
+function applyMode() {
+  const web = isWeb();
+  $('spk').disabled = web; $('hint').disabled = web;
+  $('spkNote').textContent = web ? '用這台電腦的 GPU 時沒有講者分辨；需要的話請改用 Colab。' : '知道有幾個人說話時，直接指定人數會更準。';
+  $('proof').title = web ? '用這台電腦的 GPU 時沒有 AI 校對；需要的話請改用 Colab' : '';
+  $('cpuBox').hidden = true; $('cpuNote').hidden = true;
+  renderModels(); counts();
+}
+async function useBrowser() {
+  if (MOBILE) { $('gpuMsg').textContent = '手機上沒辦法用，請用電腦的 Chrome 或 Edge，或改用 Colab。'; return toast($('gpuMsg').textContent); }
+  let ad = null;
+  try { ad = window.__FAKE_GPU || (navigator.gpu && await navigator.gpu.requestAdapter()); } catch {}
+  if (!ad) { $('gpuMsg').textContent = '這個瀏覽器不能使用顯示卡（WebGPU）。請用最新版的電腦版 Chrome 或 Edge；如果還是不行，可能是顯示卡太舊或驅動程式需要更新。'; return toast('這個瀏覽器不能使用顯示卡'); }
+  const info = ad.info || {};
+  S.mode = 'browser'; S.server = null; S.offline = false;
+  S.sys = {browser: true, device: 'webgpu', ready: true, f16: ad.features?.has?.('shader-f16') ?? false,
+           gpu: (info.description || [info.vendor, info.architecture].filter(Boolean).join(' ') || 'GPU').replace(/^./, c => c.toUpperCase())};
+
+  await webCheckCached(); setChip(true); applyMode();
+  view(S.file ? 'file' : 'drop');
+  toast(`已改用這台電腦的 GPU（${S.sys.gpu}）`);
+}
+$('useBrowser').addEventListener('click', useBrowser);
+$('switchWeb').addEventListener('click', () => { if (S.status === 'run') return toast('轉錄進行中，請先按「停止」'); useBrowser(); });
 
 /* ---------- 連線 ---------- */
-const LOCAL = 'http://localhost:8765';
-const UA = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
-const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || navigator.userAgentData?.mobile;
-const OS = /Win/i.test(UA) ? 'win' : /Mac/i.test(UA) ? 'mac' : 'linux';
-const eName = () => S.sys?.local ? '這台電腦的引擎' : 'Colab';
-if (MOBILE) $('mobileHint').hidden = false;
-else if (OS === 'win') { $('dlWin').hidden = false; $('winHint').hidden = false; }
-else { $('unixCmd').hidden = false; $('unixTxt').textContent = `curl -fsSL ${new URL('local/install.sh', location.href.split('#')[0]).href} | sh`; }
-let localWait = null;
-function waitLocal() {  // 使用者開始安裝後，每 3 秒找一次本機引擎，裝好就自動連上
-  store.set('local', true); $('lwaiting').classList.add('show');
-  clearInterval(localWait); const t0 = Date.now();
-  localWait = setInterval(async () => {
-    if (S.server) return clearInterval(localWait);
-    if (Date.now() - t0 > 20 * 60000) { clearInterval(localWait); $('lwTxt').textContent = '還沒找到本機引擎。請確認安裝視窗顯示「安裝完成」，再按「已經安裝了，連線」。'; return; }
-    if (await connect(LOCAL, true)) { clearInterval(localWait); toast('已連上這台電腦的引擎 🎉'); }
-  }, 3000);
-}
-$('dlWin').addEventListener('click', waitLocal);
-$('copyCmd').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText($('unixTxt').textContent); toast('已複製，貼到終端機按 Enter'); } catch { toast('請手動選取並複製'); }
-  waitLocal();
-});
-$('tryLocal').addEventListener('click', async () => {
-  if (await connect(LOCAL, true)) { store.set('local', true); toast('已連上這台電腦的引擎'); }
-  else toast('連不到這台電腦的引擎：請確認已安裝完成；若 Chrome 曾詢問存取權限，請選「允許」。也可以重新執行一次安裝程式。');
-});
 $('openColab').href = COLAB;
 $('openColab').addEventListener('click', () => { $('waiting').classList.add('show'); $('st1').classList.remove('now'); $('st2').classList.add('now'); });
 S.netLog = [];
@@ -423,7 +434,7 @@ function api(path, opt = {}, server = S.server) {
 }
 const MIN_ENGINE = '2026.11.20-6';  // 網站需要的最低引擎版本（AI 校對從這版開始）
 const verNum = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)-(\d+)$/); return m ? ((+m[1] * 100 + +m[2]) * 100 + +m[3]) * 1000 + +m[4] : 0; };
-const engineOld = () => S.sys && !S.sys.mock && verNum(S.sys.version) < verNum(MIN_ENGINE);
+const engineOld = () => S.sys && !S.sys.mock && !S.sys.browser && verNum(S.sys.version) < verNum(MIN_ENGINE);
 function cleanUrl(u) { u = (u || '').trim().replace(/\/+$/, ''); return /^(https:\/\/[\w.-]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(u) ? u : null; }
 async function connect(url, quiet) {
   url = cleanUrl(url); if (!url) { if (!quiet) toast('網址格式不對，應該像 https://xxxx.trycloudflare.com'); return false; }
@@ -431,25 +442,28 @@ async function connect(url, quiet) {
     const ctl = new AbortController(); setTimeout(() => ctl.abort(), 8000);
     const s = await (await fetch(url + '/api/system', {signal: ctl.signal})).json();
     if (s.app !== 'verbatim') throw 0;
-    S.server = url; S.sys = s; store.set('server', url);
+    S.server = url; S.sys = s; S.mode = null; store.set('server', url); applyMode();
     setChip(true); renderModels(); cpuHint();
     if (document.body.dataset.v === 'connect') view(S.file ? 'file' : 'drop');
-    if (engineOld()) toast(s.local ? '這台電腦的引擎是舊版：重新開機或重新執行安裝程式就會更新' : 'Colab 上的引擎是舊版，請在 Colab 重新整理頁面後按 Ctrl+F9 更新（這頁的逐字稿會保留）');
+    if (engineOld()) toast('Colab 上的引擎是舊版，請在 Colab 重新整理頁面後按 Ctrl+F9 更新（這頁的逐字稿會保留）');
     else if (s.note) toast(s.note);
     return true;
-  } catch { if (!quiet) toast(url === LOCAL ? '連不到這台電腦的引擎，請確認已安裝完成' : '連不上，Colab 可能還在啟動或已經關閉'); return false; }
+  } catch { if (!quiet) toast('連不上，Colab 可能還在啟動或已經關閉'); return false; }
 }
 function setChip(on) {
   $('cdot').className = 'dot ' + (on ? (S.offline ? 'run' : 'ok') : '');
-  $('ctxt').innerHTML = on ? `${S.sys?.local ? '這台電腦' : 'Colab'} · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : S.sys?.local ? 'CPU' : 'CPU（請改用 GPU）')}</b>${S.sys && S.sys.ready === false ? ' · 載入模型中' : ''}${engineOld() ? ' · <b style="color:var(--acc)">引擎需要更新</b>' : ''}${S.offline ? ' · <b style="color:var(--acc)">連線中斷</b>' : ''}` : '未連線';
+  if (on && isWeb()) { $('ctxt').innerHTML = `這台電腦 · <b>${esc(S.sys.gpu || 'GPU')}</b>`; return; }
+  $('ctxt').innerHTML = on ? `Colab · <b>${esc(S.sys?.mock ? '測試模式' : S.sys?.device === 'cuda' ? (S.sys.gpu || 'GPU') : S.sys?.local ? 'CPU' : 'CPU（請改用 GPU）')}</b>${S.sys && S.sys.ready === false ? ' · 載入模型中' : ''}${engineOld() ? ' · <b style="color:var(--acc)">引擎需要更新</b>' : ''}${S.offline ? ' · <b style="color:var(--acc)">連線中斷</b>' : ''}` : '未連線';
 }
 function disconnected() {
   if (!S.server) return;
   S.server = null; setChip(false);
   if (S.status !== 'run') { view('connect'); $('waiting').classList.remove('show'); ['st1','st2','st3'].forEach((id, i) => $(id).classList.toggle('now', i === 0)); }
-  toast(S.sys?.local ? '和這台電腦的引擎失去連線：重新開機或重新執行安裝程式可以恢復' : '和 Colab 的連線斷了，請重新啟動 Colab');
+  toast('和 Colab 的連線斷了，請重新啟動 Colab');
 }
-$('chip').addEventListener('click', () => { if (!S.server) return; if (confirm('要中斷連線，改用其他引擎嗎？')) { store.set('server', null); disconnected(); } });
+$('chip').addEventListener('click', () => {
+  if (isWeb()) { if (S.status === 'run') return toast('轉錄進行中，完成後再切換'); if (confirm('要改用 Colab 嗎？')) { S.mode = null; S.sys = null; setChip(false); applyMode(); view('connect'); } return; }
+  if (!S.server) return; if (confirm('要中斷連線，改用其他引擎嗎？')) { store.set('server', null); disconnected(); } });
 $('manualGo').addEventListener('click', () => connect($('manualUrl').value));
 $('manualUrl').addEventListener('keydown', e => { if (e.key === 'Enter') connect(e.target.value); });
 // Colab 的「回到逐字網站」按鈕會帶著 #server=… 打開這頁；舊分頁透過 storage 事件同步連上
@@ -459,30 +473,23 @@ setInterval(async () => {
   if (S.server) { try { S.sys = await api('/api/system', {timeout: 10000}); S.offline = false; setChip(true); renderModels(); }
     catch (e) { netErr('連線檢查', e); if (S.status === 'run' || S.proof) { S.offline = true; setChip(true); } else disconnected(); } }
   else if (document.body.dataset.v === 'connect') {
-    if (store.get('local') && await connect(LOCAL, true)) return;   // 開機後本機引擎才啟動完成的情況
     if ($('waiting').classList.contains('show')) { const u = store.get('server'); if (u) connect(u, true); } }
 }, 15000);
 async function fromHash() {
   const m = location.hash.match(/server=([^&]+)/); if (!m) return false;
   history.replaceState(null, '', location.pathname);
-  const u = decodeURIComponent(m[1]);
-  if (await connect(u)) { if (u === LOCAL) store.set('local', true); if (!engineOld()) toast(u === LOCAL ? '已連上這台電腦的引擎' : '已連上 Colab'); return true; }
+  if (await connect(decodeURIComponent(m[1]))) { if (!engineOld()) toast('已連上 Colab'); return true; }
   return false;
 }
 addEventListener('hashchange', fromHash);
-// 打開網站：先找這台電腦的引擎（安裝過才會找，避免沒裝的人被 Chrome 詢問權限），再試上次的 Colab
-(async () => {
-  if (await fromHash()) return;
-  if (store.get('local') && await connect(LOCAL, true)) return;
-  const saved = store.get('server'); if (saved && saved !== LOCAL) connect(saved, true);
-})();
+(async () => { if (await fromHash()) return; const saved = store.get('server'); if (saved && !/localhost|127\.0\.0\.1/.test(saved)) connect(saved, true); })();
 renderModels();
 
 /* ---------- 選檔 ---------- */
 const drop = $('drop');
-['dragenter','dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (S.server) drop.classList.add('over'); }));
+['dragenter','dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (S.server || isWeb()) drop.classList.add('over'); }));
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('over'); });
-document.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f && S.server) pickFile(f); });
+document.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f && (S.server || isWeb())) pickFile(f); });
 $('file').addEventListener('change', e => { if (e.target.files[0]) pickFile(e.target.files[0]); e.target.value = ''; });
 $('change').addEventListener('click', () => $('file').click());
 function pickFile(f) {
@@ -495,7 +502,7 @@ function pickFile(f) {
   anim.shown = 0; anim.parts = [];
   if (au.src) URL.revokeObjectURL(au.src);
   au.src = URL.createObjectURL(f);
-  view(S.server ? 'file' : 'connect'); $('fname').textContent = f.name; $('fmeta').textContent = mb(f.size);
+  view(S.server || isWeb() ? 'file' : 'connect'); $('fname').textContent = f.name; $('fmeta').textContent = mb(f.size);
   $('go').disabled = false; $('go').textContent = '開始轉錄';
   setStatus('', '準備好了', 0); renderAll(); renderModels(); draw(); computePeaks(f);
 }
@@ -517,7 +524,7 @@ async function computePeaks(f) {
 /* 動畫：轉錄時波形上有一道掃描光束，掃過的地方亮起並噴出光點；還沒開始轉錄（上傳、載入模型）時有一道光帶來回掃 */
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const anim = {on:false, parts:[], flash:0, shown:0};
-const busy = () => S.status === 'run' || S.proof;
+const busy = () => (S.status === 'run' || S.proof) && !S.paused;
 function animate() {
   if (RM) return draw();
   if (anim.on) return; anim.on = true;
@@ -531,7 +538,8 @@ function draw() {
   const now = performance.now();
   // 顯示的進度平滑追上真實進度，光束移動才不會一格一格跳
   anim.shown += (S.progress - anim.shown) * (RM ? 1 : .08); if (Math.abs(S.progress - anim.shown) < .0005) anim.shown = S.progress;
-  const n = Math.floor(W/4), done = anim.shown * W, mid = H/2, running = S.status === 'run' && !RM;
+  const n = Math.floor(W/4), done = anim.shown * W, mid = H/2, running = S.status === 'run' && !RM && !S.paused;
+  if (S.paused) anim.parts = [];
   const amp = x => S.peaks ? Math.max(.03, S.peaks[Math.floor(Math.min(.9999, x / W) * S.peaks.length)]) : .04;
   for (let i = 0; i < n; i++) {
     const x = i*4 + 1, h = Math.max(2, amp(x) * H * .82);
@@ -556,6 +564,7 @@ function draw() {
       c.globalAlpha = p.life; c.fillStyle = p.life > .6 ? '#ffd2bd' : '#ff5a1f'; c.beginPath(); c.arc(p.x, p.y, 1.2 + p.life * 1.6, 0, 7); c.fill(); }
     c.globalAlpha = 1;
   }
+  if (S.paused && anim.shown > 0) { c.fillStyle = '#f7c948'; c.fillRect(done - 1, 0, 2, H); }   // 暫停：黃色靜止線
   const fl = (now - anim.flash) / 900;                         // 完成時的閃光
   if (fl >= 0 && fl < 1 && !RM) { c.fillStyle = `rgba(255,255,255,${.22 * (1 - fl)})`; c.fillRect(0, 0, W, H); }
   if (S.dur) { const px = au.currentTime / S.dur * W; c.fillStyle = '#ff5a1f'; c.fillRect(px-1, 0, 2, H); c.beginPath(); c.arc(px, 6, 5, 0, 7); c.fill(); }
@@ -671,7 +680,8 @@ function counts() {
   const segs = S.segs.filter(s => s.text), chars = segs.reduce((a, s) => a + s.text.replace(/\s/g, '').length, 0);
   const nsp = new Set(S.segs.map(s => s.speaker).filter(v => v !== undefined).map(spkKey)).size;
   $('count').textContent = segs.length ? `${segs.length} 句 · ${chars.toLocaleString()} 字${nsp ? ` · ${nsp} 位講者` : ''}` : '';
-  ['copy','proof','dl2'].forEach(id => $(id).disabled = !segs.length || S.status === 'run' || S.proof);
+  ['copy','proof','dl2'].forEach(id => $(id).disabled = !segs.length || S.status === 'run' || S.status === 'stopping' || S.proof);
+  if (isWeb()) $('proof').disabled = true;
   $('dl').hidden = !segs.length || S.status === 'run';
   $('go').classList.toggle('ghost', !$('dl').hidden); $('go').classList.toggle('acc', $('dl').hidden);
 }
@@ -684,11 +694,29 @@ $('q').addEventListener('input', applySearch);
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') paper.querySelector('.row:not(.dim)')?.scrollIntoView({block:'center', behavior:'smooth'}); if (e.key === 'Escape') { e.target.value = ''; applySearch(); } });
 
 /* ---------- 轉錄 ---------- */
+// 暫停按鈕：轉錄或 AI 校對進行中才出現
+function pauseUI() {
+  const can = (S.status === 'run' && (isWeb() || S.job)) || (S.proof && S.proofJob);
+  $('pause').hidden = !can; $('pause').textContent = S.paused ? '▶ 繼續' : '❚❚ 暫停'; $('pause').classList.toggle('on', !!S.paused);
+}
+const pauseFresh = () => Date.now() - (S.pauseAt || 0) < 2500;
+function showPaused() { setStatus('pz', `已暫停 · ${Math.round((S.proof ? S.proofPct : S.progress) * 100)}%，按「繼續」從這裡接著${S.proof ? '校對' : '轉'}`); }
+$('pause').addEventListener('click', async () => {
+  const want = !S.paused, jid = S.proof ? S.proofJob : S.job;
+  try {
+    if (!isWeb() || S.proof) await api(`/api/jobs/${jid}/${want ? 'pause' : 'resume'}`, {method: 'POST'}, S.proof ? S.server : S.jobServer);
+    S.paused = want; S.pauseAt = Date.now(); pauseUI();
+    if (want && isWeb() && !S.proof) { S.pauseWaiting = true; setStatus('pz', '暫停中…這一段轉完就停（幾秒）'); }
+    else if (want) { showPaused(); toast('已暫停，GPU 停下來了；按「繼續」會從這裡接著做'); }
+    else { S.pauseWaiting = false; setStatus('run', '繼續中…'); }
+  } catch (e) { toast('暫停失敗：' + e.message); }
+});
 function setStatus(kind, txt, p) {
   $('dot').className = 'dot ' + kind; $('stxt').textContent = txt;
   if (p !== undefined) { if (!S.proof || kind === 'ok') S.progress = S.proof ? 1 : p; $('barI').style.width = (p*100).toFixed(1) + '%'; }  // 校對進度只走進度條，不動波形
   if (kind === 'ok' && !RM) anim.flash = performance.now();
-  if (kind === 'run' || kind === 'ok') animate(); else draw();
+  if ((kind === 'run' && !S.paused) || kind === 'ok') animate(); else draw();
+  pauseUI();
 }
 const CHUNK = window.__CHUNK || 40 * 1048576;
 async function uploadFile(f) {
@@ -707,11 +735,12 @@ async function uploadFile(f) {
   return uid;
 }
 $('go').addEventListener('click', async () => {
-  if (S.status === 'run') { S.status = 'stopping'; if (S.job) api(`/api/jobs/${S.job}/cancel`, {method:'POST'}).catch(() => {}); setStatus('run', '停止中…'); return; }
+  if (S.status === 'run') { S.status = 'stopping'; S.paused = false; if (S.job && !isWeb()) api(`/api/jobs/${S.job}/cancel`, {method:'POST'}, S.jobServer).catch(() => {}); setStatus('run', '停止中…'); return; }
+  if (isWeb()) return webTranscribe();
   if (!S.server) return disconnected();
   if (S.segs.length && !confirm('重新轉錄會取代目前的逐字稿，確定嗎？')) return;
   savePrefs(); S.segs = []; S.names = {}; S.rev = 0; S.job = null; renderAll();
-  S.status = 'run'; renderModels(); $('go').textContent = '停止'; $('diagBtn').hidden = true; counts();
+  S.status = 'run'; S.paused = false; renderModels(); $('go').textContent = '停止'; $('diagBtn').hidden = true; counts();
   const f = S.file;
   try {
     const uid = await uploadFile(f);
@@ -724,7 +753,7 @@ $('go').addEventListener('click', async () => {
   } catch (e) { if (S.file === f) finish('', e.message === '已取消' ? '已停止' : e.message, true); }
 });
 function finish(kind, msg, isErr) {
-  S.status = 'idle'; $('go').textContent = '重新轉錄'; renderModels(); counts();
+  S.paused = false; S.status = 'idle'; $('go').textContent = '重新轉錄'; renderModels(); counts();
   setStatus(kind, msg, kind === 'ok' ? 1 : undefined); if (isErr) toast(msg);
   if (isErr) { S.lastError = msg; $('diagBtn').hidden = false; }
 }
@@ -734,7 +763,7 @@ $('diagBtn').addEventListener('click', async () => {
     '檔案：' + (S.file ? `${S.file.name}（${mb(S.file.size)}，${S.file.type || '未知格式'}）` : '—'),
     '模型：' + S.model + '　講者：' + $('spk').value + '　語言：' + ($('lang').value || '自動'),
     '瀏覽器：' + navigator.userAgent, '連線網址：' + (S.jobServer || S.server || '—'), '網路紀錄：' + (S.netLog.join(' | ') || '無'),
-    '引擎：' + (d ? JSON.stringify(d) : '（無法連線到 Colab）')].join('\n');
+    '引擎：' + (isWeb() ? `這台電腦的 GPU（瀏覽器）${S.sys.gpu}，fp16=${S.sys.f16}，模型 ${S.webModel}` : d ? JSON.stringify(d) : '（無法連線到 Colab）')].join('\n');
   try { await navigator.clipboard.writeText(info); } catch { const t = document.createElement('textarea'); t.value = info; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
   toast('已複製，貼給網站管理者就可以了');
 });
@@ -745,16 +774,18 @@ async function poll(f) {
     if (S.file !== f) return;
     S.lastOk = Date.now();
     if (S.fails) { S.fails = 0; S.failSince = 0; S.offline = false; setChip(true); $('diagBtn').hidden = true; toast('已重新連上 Colab，繼續轉錄'); }
+    if (j.status !== 'paused' && S.paused && !pauseFresh()) S.paused = false;
     if (j.full) { S.segs = j.segments; S.rev = j.rev; renderAll(); }
     else if (j.segments.length) { const from = S.segs.length; S.segs.push(...j.segments); renderAll(from); }
     const lang = LANGS[j.language] ? ' · ' + LANGS[j.language] : '';
     if (j.status === 'queued') setStatus('run', j.ahead ? `排隊中，前面還有 ${j.ahead} 個檔案` : '排隊中…');
     else if (j.status === 'loading') setStatus('run', '載入模型中（換模型時約需 1–2 分鐘）…');
-    else if (j.status === 'transcribing') setStatus('run', `轉錄中 ${Math.round(j.progress*100)}%${lang}`, j.progress);
+    else if (j.status === 'paused' && !(pauseFresh() && !S.paused)) { S.paused = true; S.progress = j.progress || S.progress; showPaused(); }
+    else if (j.status === 'transcribing' || j.status === 'paused') { if (S.paused) showPaused(); else setStatus('run', `轉錄中 ${Math.round(j.progress*100)}%${lang}`, j.progress); }
     else if (j.status === 'diarizing') setStatus('run', '分辨講者中…', 1);
     else if (j.status === 'done') { finish('ok', `完成${lang} · ${MODELS.find(m => m.key === S.model)?.name || ''}`); toast(j.warning || '轉錄完成');
       if (j.warning) { S.lastError = j.warning; $('diagBtn').hidden = false; } return; }
-    else if (j.status === 'cancelled') return finish('', '已停止');
+    else if (j.status === 'cancelled') return finish('', `已停止 · 保留 ${S.segs.length} 句`);
     else if (j.status === 'error') return finish('', '轉錄失敗：' + (j.error || '未知錯誤'), true);
   } catch (e) {
     if (S.file !== f) return;
@@ -766,18 +797,148 @@ async function poll(f) {
     else {
       let why = '';
       try { await api('/api/system', {timeout: 6000}, S.jobServer); why = '引擎有回應，但讀不到進度，繼續重試中…'; }
-      catch { why = `${eName()}沒有回應`; }
+      catch { why = `Colab沒有回應`; }
       S.offline = true; setChip(true);
-      S.lastError = `轉錄途中和${eName()}失去連線（已持續 ${sec} 秒）：${why}`;
+      S.lastError = `轉錄途中和Colab失去連線（已持續 ${sec} 秒）：${why}`;
       $('diagBtn').hidden = false;
-      setStatus('run', `和${eName()}失去連線 ${fmt(sec)}，恢復後會自動接續`);
-      if (sec >= 20 && sec < 25) toast(S.sys?.local ? '連不到這台電腦的引擎：它可能正在重新啟動，恢復後這裡會自動接續。' : '連不到 Colab：請確認 Colab 分頁還開著、沒有出現「已中斷連線」。Colab 恢復後這裡會自動接續，不用重新上傳。');
+      setStatus('run', `和Colab失去連線 ${fmt(sec)}，恢復後會自動接續`);
+      if (sec >= 20 && sec < 25) toast('連不到 Colab：請確認 Colab 分頁還開著、沒有出現「已中斷連線」。Colab 恢復後這裡會自動接續，不用重新上傳。');
       if (sec > 900) return finish('', '和 Colab 失去連線超過 15 分鐘，已停止等待。請到 Colab 看看是否已中斷，重新啟動後再轉錄一次。', true);
     }
   }
   S.timer = setTimeout(() => poll(f), S.fails ? 3000 : 1200);
 }
 addEventListener('beforeunload', e => { if (S.status === 'run' || S.segs.length) e.preventDefault(); });
+
+/* ---------- 這台電腦的 GPU：在瀏覽器裡用 transformers.js（WebGPU）跑 Whisper ---------- */
+const TF_URL = window.__TF_URL || 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';
+const WORKER = `
+const lib = import('${TF_URL}').then(T => { T.env.allowLocalModels = false; return T; });
+// 同一個模型換格式重載時，用 key 區分
+let asr = null, key = null;
+self.onmessage = async ({ data: m }) => {
+  try {
+    const { pipeline } = await lib;
+    if (m.type === 'load') {
+      if (key !== m.key) {
+        if (asr) { try { await asr.dispose(); } catch {} asr = null; key = null; }
+        asr = await pipeline('automatic-speech-recognition', m.repo, { device: 'webgpu', dtype: m.dtype,
+          progress_callback: p => { if (p.status === 'progress_total') postMessage({ type: 'dl', progress: p.progress, loaded: p.loaded, total: p.total }); } });
+        key = m.key;
+      }
+      postMessage({ type: 'ready', id: m.id });
+    } else if (m.type === 'run') {
+      const opt = { task: 'transcribe', return_timestamps: true };
+      if (m.lang) opt.language = m.lang;
+      const out = await asr(m.audio, opt);
+      postMessage({ type: 'result', id: m.id, text: out.text, chunks: out.chunks || [] });
+    }
+  } catch (e) { postMessage({ type: 'error', id: m.id, message: String(e && e.message || e) }); }
+};`;
+let wk = null, wkId = 0; const wkPending = new Map(), W = {loaded: null};
+function webWorker() {
+  if (wk) return wk;
+  wk = new Worker(URL.createObjectURL(new Blob([WORKER], {type: 'text/javascript'})));  // 一般 worker＋動態 import，相容性最好
+  wk.onmessage = ({data: m}) => {
+    if (m.type === 'dl') { setStatus('run', `下載模型 ${Math.round(m.progress)}%` + (m.total ? ` · ${mb(m.loaded)} / ${mb(m.total)}` : '') + '（只有第一次）', 0); return; }
+    const p = wkPending.get(m.id); if (!p) return; wkPending.delete(m.id);
+    m.type === 'error' ? p.no(new Error(m.message)) : p.ok(m);
+  };
+  wk.onerror = e => { wkPending.forEach(p => p.no(new Error(e.message || '辨識元件載入失敗，請確認網路連線'))); wkPending.clear(); wk = null; };
+  return wk;
+}
+const wkCall = (msg, tr) => new Promise((ok, no) => { const id = ++wkId; wkPending.set(id, {ok, no}); webWorker().postMessage({...msg, id}, tr || []); });
+async function webCheckCached() {
+  S.webCached = new Set();
+  try { const keys = (await (await caches.open('transformers-cache')).keys()).map(r => r.url);
+    WEB_MODELS.forEach(m => { if (keys.some(u => u.includes(m.repo) && u.includes('.onnx'))) S.webCached.add(m.key); }); } catch {}
+}
+let occ = null;  // 繁體轉換（簡→臺灣正體），需要時才載入
+const loadOpenCC = () => occ ? Promise.resolve(occ) : new Promise(ok => {
+  const sc = document.createElement('script'); sc.src = window.__OPENCC_URL || 'https://cdn.jsdelivr.net/npm/opencc-js@1.4.2/dist/umd/cn2t.js';
+  sc.onload = () => { try { occ = OpenCC.Converter({from: 'cn', to: 'twp'}); } catch { occ = t => t; } ok(occ); }; sc.onerror = () => ok(occ = t => t);
+  document.head.appendChild(sc); });
+const WSR = 16000;
+function nextCut(a, start) {  // 在 20–30 秒之間找最安靜的地方切段，避免把一句話切成兩半
+  const max = start + 30 * WSR; if (max >= a.length) return a.length;
+  const F = 1600; let best = max - F, bestE = Infinity;
+  for (let i = start + 20 * WSR; i + F <= max; i += 800) { let e = 0; for (let j = i; j < i + F; j += 4) e += a[j] * a[j]; if (e < bestE) { bestE = e; best = i + F / 2; } }
+  return best;
+}
+const rms = a => { let e = 0; for (let i = 0; i < a.length; i += 8) e += a[i] * a[i]; return Math.sqrt(e / (a.length / 8)); };
+const JUNK = /(字幕|訂閱|订阅|點贊|点赞|按讚|打賞|打赏|Amara|請不吝|请不吝|感謝觀看|感谢观看|謝謝觀看|谢谢观看|明鏡與點點|明镜与点点|優優獨播|优优独播)/;
+function webClean(text, prev, zh) {   // 和 Colab 引擎相同的後處理：去掉幻聽字幕、轉繁體、「壹」、半形標點
+  let t = text.replace(/\s+/g, ' ').trim();
+  if (!t || (JUNK.test(t) && t.length < 40)) return '';
+  if (zh) {
+    if ($('trad').checked && occ) t = occ(t);
+    t = t.replace(/壹(?![拾佰仟萬億圓元角])/g, '一');
+    for (const [a, b] of [[',', '，'], ['?', '？'], ['!', '！'], [':', '：'], [';', '；']]) t = t.replace(new RegExp(`(?<=[\\u4e00-\\u9fff])\\${a}\\s*`, 'g'), b);
+    t = t.replace(/(?<=[一-鿿])\.(?!\d)\s*/g, '。');
+  }
+  return t === prev ? '' : t;
+}
+async function webTranscribe() {
+  if (S.segs.length && !confirm('重新轉錄會取代目前的逐字稿，確定嗎？')) return;
+  const m = WEB_MODELS.find(x => x.key === S.webModel) || WEB_MODELS[1], lang = $('lang').value, f = S.file;
+  savePrefs(); S.segs = []; S.names = {}; renderAll();
+  S.status = 'run'; S.paused = false; renderModels(); $('go').textContent = '停止'; $('diagBtn').hidden = true; counts();
+  setStatus('run', '準備中…', 0);
+  try {
+    // 1. 解碼成 16 kHz 單聲道
+    setStatus('run', '讀取音訊…', 0);
+    const ctx = new AudioContext({sampleRate: WSR});
+    const buf = await ctx.decodeAudioData(await f.arrayBuffer()); ctx.close();
+    let pcm = buf.getChannelData(0);
+    if (buf.numberOfChannels > 1) { const r = buf.getChannelData(1), mix = new Float32Array(pcm.length); for (let i = 0; i < pcm.length; i++) mix[i] = (pcm[i] + r[i]) / 2; pcm = mix; }
+    // 2. 載入模型（第一次會下載，之後從瀏覽器快取讀）
+    if (lang !== 'en') await loadOpenCC();
+    if (W.loaded !== m.key) {
+      const tries = m.dtypes || [{encoder_model: m.f16 && S.sys.f16 ? 'fp16' : 'fp32', decoder_model_merged: 'q4'}];
+      let lastErr = null;
+      for (const dt of tries) {
+        setStatus('run', S.webCached?.has(m.key) ? '載入模型中…' : `準備下載模型（只有第一次${m.big ? '，檔案較大請稍候' : ''}）…`, 0);
+        try { await wkCall({type: 'load', key: m.key + JSON.stringify(dt), repo: m.repo, dtype: dt}); lastErr = null; break; }
+        catch (e) { lastErr = e; console.warn('載入失敗，換下一種格式', dt, e); }
+        if (S.status !== 'run') return finish('', '已停止');
+      }
+      if (lastErr) { (S.webFailed ||= new Set()).add(m.key); renderModels();
+        throw new Error(m.big ? `這台電腦的顯示卡載不動 ${m.name}（${lastErr.message}）。可以改選 Large v3 Turbo，準確度接近、檔案小很多。` : lastErr.message); }
+      W.loaded = m.key; S.webCached?.add(m.key); renderModels();
+    }
+    // 3. 每 20–30 秒一段送進模型，結果一段段出現
+    const t0 = performance.now(); let pos = 0, prev = '', zh = lang === 'zh';
+    while (pos < pcm.length) {
+      while (S.paused && S.status === 'run' && S.file === f) await new Promise(ok => setTimeout(ok, 300));
+      if (S.status !== 'run' || S.file !== f) break;
+      const end = nextCut(pcm, pos), win = pcm.slice(pos, end), off = pos / WSR, wlen = win.length / WSR;
+      if (rms(win) > 0.003) {
+        const r = await wkCall({type: 'run', audio: win, lang}, [win.buffer]);
+        if (S.file !== f) return;
+        const chunks = r.chunks.length ? r.chunks : [{timestamp: [0, wlen], text: r.text}], add = [];
+        for (const c of chunks) {
+          if (!zh && /[一-鿿]/.test(c.text) && lang === '') zh = true;
+          const t = webClean(c.text, prev, zh || lang === 'zh'); if (!t) continue; prev = t;
+          const st = off + (c.timestamp[0] ?? 0), en = off + Math.min(c.timestamp[1] ?? wlen, wlen);
+          add.push({start: +st.toFixed(2), end: +Math.max(en, st + .5).toFixed(2), text: t});
+        }
+        if (add.length) { const from = S.segs.length; S.segs.push(...add); renderAll(from); }
+      }
+      pos = end;
+      const done = pos / pcm.length, el = (performance.now() - t0) / 1000, left = el / done * (1 - done);
+      if (S.paused) { S.progress = done; showPaused(); if (S.pauseWaiting) { S.pauseWaiting = false; toast('已暫停，GPU 停下來了；按「繼續」會從這裡接著轉'); } continue; }
+      setStatus('run', `轉錄中 ${Math.round(done * 100)}%` + (done > .03 && done < 1 ? ` · 約剩 ${left > 90 ? Math.round(left / 60) + ' 分鐘' : Math.max(5, Math.round(left)) + ' 秒'}` : ''), done);
+    }
+    if (S.file !== f) return;
+    if (S.status === 'stopping') finish('', `已停止 · 保留 ${S.segs.length} 句`);
+    else { finish('ok', `完成 · ${m.name} · 這台電腦的 GPU`); toast('轉錄完成'); }
+  } catch (e) {
+    console.error(e);
+    if (S.file !== f) return;
+    const msg = /decode|Unable to decode|EncodingError/i.test(e.message) ? '瀏覽器讀不了這個檔案的聲音，試試轉成 mp3 或 m4a' : '轉錄失敗：' + e.message;
+    finish('', msg, true);
+  }
+}
 
 /* ---------- 匯出 ---------- */
 const base = () => (S.file?.name || '逐字稿').replace(/\.[^.]+$/, '');
@@ -847,6 +1008,7 @@ function markProof(done) {
     r.classList.toggle('pd', last < done); r.classList.toggle('pf', last >= done && first < done + 30); });
 }
 $('proof').addEventListener('click', () => {
+  if (isWeb()) return toast('用這台電腦的 GPU 時沒有 AI 校對。要校對的話，請點右上角改用 Colab，逐字稿會保留。');
   if (!S.server) return disconnected();
   if (engineOld()) return toast('Colab 上的引擎是舊版，還沒有 AI 校對。請在 Colab 重新整理頁面後按 Ctrl+F9，完成後回到這一頁再按一次（逐字稿會保留）');
   const chars = S.segs.reduce((a, x) => a + x.text.length, 0), min = Math.max(1, Math.round(chars / 1600));
@@ -862,7 +1024,7 @@ async function startProof() {
   try {
     const r = await api('/api/proofread', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({segments: sent.map(text => ({text})), hint: $('hint').value, trad: $('trad').checked})});
-    const srv = S.server; let failSince = 0;
+    const srv = S.server; let failSince = 0; S.proofJob = r.id; S.proofPct = 0; pauseUI();
     while (true) {
       await new Promise(ok => setTimeout(ok, failSince ? 3000 : 1500));
       if (S.file !== file) return;
@@ -873,9 +1035,13 @@ async function startProof() {
         netErr('校對進度', e); failSince = failSince || Date.now();
         const sec = Math.round((Date.now() - failSince) / 1000);
         if (sec > 900) throw new Error('和 Colab 失去連線超過 15 分鐘');
-        if (sec > 20) { S.offline = true; setChip(true); setStatus('run', `和${eName()}失去連線 ${fmt(sec)}，恢復後會自動接續`); }
+        if (sec > 20) { S.offline = true; setChip(true); setStatus('run', `和Colab失去連線 ${fmt(sec)}，恢復後會自動接續`); }
         continue;
       }
+      S.proofPct = j.done / j.total;
+      if (j.status === 'paused' && !(pauseFresh() && !S.paused)) { S.paused = true; showPaused(); continue; }
+      if (S.paused && j.status !== 'paused' && !pauseFresh()) S.paused = false;
+      if (S.paused) { showPaused(); continue; }
       if (j.status === 'proofreading') { setStatus('run', `AI 校對中 ${Math.round(j.done / j.total * 100)}%`, j.done / j.total); markProof(j.done); }
       else if (PSTAT[j.status]) setStatus('run', PSTAT[j.status], 0);
       else if (j.status === 'error') throw new Error(j.error || '校對失敗');
@@ -889,7 +1055,7 @@ async function startProof() {
     }
   } catch (e) { if (/Not Found/.test(e.message)) e.message = 'Colab 上的引擎是舊版，請在 Colab 重新整理頁面後按 Ctrl+F9 更新';
     setStatus('', 'AI 校對失敗'); S.lastError = 'AI 校對：' + e.message; $('diagBtn').hidden = false; toast('AI 校對失敗：' + e.message); }
-  finally { S.proof = false; counts(); }
+  finally { S.proof = false; S.proofJob = null; S.paused = false; counts(); pauseUI(); }
 }
 $('copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(asText()); }

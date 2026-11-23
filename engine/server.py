@@ -7,7 +7,7 @@
 """
 import os, sys, uuid, time, queue, threading, traceback, gc, platform, collections
 
-VERSION = "2026.11.23-3"
+VERSION = "2026.11.23-4"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VERBATIM_DATA", APP_DIR)
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -264,6 +264,17 @@ def friendly(e):
 
 
 # ---------- 轉錄工作 ----------
+def wait_if_paused(job, resume_status):
+    """使用者按了暫停：停在這裡等，按繼續後回到原本的狀態"""
+    if not job.get("paused"):
+        return
+    job["status"] = "paused"
+    while job.get("paused") and not job.get("cancel"):
+        time.sleep(0.3)
+    if not job.get("cancel"):
+        job["status"] = resume_status
+
+
 def run_job(jid):
     job = jobs[jid]
     try:
@@ -298,6 +309,7 @@ def run_job(jid):
         job["duration"], job["language"] = round(info.duration, 2), info.language
         trad = job["trad"] and info.language == "zh"
         for s in segs:
+            wait_if_paused(job, "transcribing")
             if job.get("cancel"):
                 job["status"] = "cancelled"
                 break
@@ -345,6 +357,10 @@ def mock_run(job):  # 本機測試用
     t = 0.0
     for i in range(10):
         time.sleep(0.3)
+        wait_if_paused(job, "transcribing")
+        if job.get("cancel"):
+            job["status"] = "cancelled"
+            return
         d = 3.4 + (i % 3)
         job["segments"].append({"start": round(t, 2), "end": round(t + d, 2), "text": lines[i % 5]})
         t += d
@@ -373,7 +389,8 @@ def run_proof(jid):
             job["done"] = done
         def post(t):
             return fix_text(to_trad(t)) if job["trad"] else fix_text(t)
-        res = proofread.proofread(llm, texts, job["hint"], prog, lambda: job.get("cancel"), post)
+        res = proofread.proofread(llm, texts, job["hint"], prog, lambda: job.get("cancel"), post,
+                                  pause_wait=lambda: wait_if_paused(job, "proofreading"))
         job["result"] = [{"text": t, "para": p, "changed": c} for t, p, c in res]
         job["status"] = "cancelled" if job.get("cancel") else "done"
     except Exception as e:
@@ -385,6 +402,7 @@ def mock_proof(job):
     out = []
     for i, x in enumerate(job["input"]):
         time.sleep(0.15)
+        wait_if_paused(job, "proofreading")
         t = x["text"].replace("燈太暗", "燈光太暗").replace("騎很快", "騎得很快")
         out.append({"text": t, "para": i % 3 == 0, "changed": t != x["text"]})
         job["done"] = i + 1
@@ -520,10 +538,27 @@ def proofread_status(jid: str):
             "result": job["result"] if job["status"] == "done" else None}
 
 
+@app.post("/api/jobs/{jid}/pause")
+def pause(jid: str):
+    if jid not in jobs:
+        raise HTTPException(404, "找不到這個工作")
+    jobs[jid]["paused"] = True
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{jid}/resume")
+def resume(jid: str):
+    if jid not in jobs:
+        raise HTTPException(404, "找不到這個工作")
+    jobs[jid]["paused"] = False
+    return {"ok": True}
+
+
 @app.post("/api/jobs/{jid}/cancel")
 def cancel(jid: str):
     if jid in jobs:
         jobs[jid]["cancel"] = True
+        jobs[jid]["paused"] = False
         if jobs[jid]["status"] == "queued":
             jobs[jid]["status"] = "cancelled"
     return {"ok": True}

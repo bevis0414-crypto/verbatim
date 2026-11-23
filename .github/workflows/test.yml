@@ -1,8 +1,7 @@
 name: 引擎自動測試
 
 # 每次更新、加上每週一次，用真的 Whisper 和講者模型把「上傳 → 轉錄 → 分辨講者」完整跑一遍。
-# Linux（同 Colab 環境）、Windows、Mac 三個平台都通過才會更新 stable 分支；
-# Colab 筆記本和本機安裝程式只使用 stable，所以沒通過測試的改動不會到使用者手上。
+# 通過才會更新 stable 分支；Colab 筆記本只使用 stable，所以沒通過測試的改動不會到使用者手上。
 on:
   push:
     branches: [main]
@@ -58,96 +57,9 @@ jobs:
           git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-logs
 
 
-  local:
-    name: 本機安裝（${{ matrix.os }}）
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2025, macos-15]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    env:
-      PYTHONIOENCODING: utf-8
-      VERBATIM_ENGINE_SRC: ${{ github.workspace }}/engine
-      VERBATIM_LAUNCH_SRC: ${{ github.workspace }}/local/launch.py
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 執行安裝程式（Windows：install.bat）
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          mkdir -p ci-log
-          cmd //c "local\\install.bat --no-browser" > ci-log/install.txt 2>&1; rc=$?
-          cat ci-log/install.txt; exit $rc
-
-      - name: 執行安裝程式（Mac：install.sh）
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p ci-log
-          set -o pipefail
-          sh local/install.sh --no-browser 2>&1 | tee ci-log/install.txt
-
-      - name: 確認引擎在背景待命、只聽本機、已設定開機啟動
-        shell: bash
-        env:
-          MSYS_NO_PATHCONV: "1"   # Windows 的 bash 預設會把 /v 之類的參數當成路徑改寫
-        run: |
-          mkdir -p ci-log
-          {
-            sleep 5
-            curl -sf http://localhost:8765/api/system | tee "$RUNNER_TEMP/sys.json"; echo
-            grep -q '"local":true' "$RUNNER_TEMP/sys.json" && echo "OK 引擎在背景待命"
-            if [ "$RUNNER_OS" = "Windows" ]; then
-              reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v VerbatimEngine && echo "OK 開機啟動"
-            else
-              test -f "$HOME/Library/LaunchAgents/io.github.verbatim.engine.plist" && echo "OK 開機啟動"
-            fi
-            curl -sf -X OPTIONS http://localhost:8765/api/system -H "Origin: https://bevis0414-crypto.github.io" \
-              -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Private-Network: true" -D "$RUNNER_TEMP/h.txt" -o "$RUNNER_TEMP/b.txt"
-            grep -qi "access-control-allow-private-network: true" "$RUNNER_TEMP/h.txt" && echo "OK 私人網路存取"
-          } 2>&1 | tee ci-log/check.txt
-
-      - name: 端對端測試（轉錄、講者分辨、AI 校對，用安裝好的環境）
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            ROOT="$LOCALAPPDATA/Verbatim"; PY="$ROOT/venv/Scripts/python.exe"; export VERBATIM_UV="$ROOT/uv/uv.exe"
-          else
-            ROOT="$HOME/Library/Application Support/Verbatim"; PY="$ROOT/venv/bin/python"; export VERBATIM_UV="$ROOT/uv/uv"
-          fi
-          mkdir -p ci-log
-          "$PY" tests/make_dialog.py "$RUNNER_TEMP/t" 2>&1 | tee ci-log/make_dialog.txt
-          set -o pipefail
-          PYTHONIOENCODING=utf-8 VERBATIM_TEST_PROOF=1 VERBATIM_LLM_REPO=Qwen/Qwen3-0.6B-GGUF VERBATIM_LLM_FILE=Qwen3-0.6B-Q8_0.gguf \
-            "$PY" tests/e2e.py "$RUNNER_TEMP/t/dialog.mp3" "$RUNNER_TEMP/t/dialog_truth.json" small 2>&1 | tee ci-log/e2e.txt
-
-      - name: 移除，確認清乾淨
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then ROOT="$LOCALAPPDATA/Verbatim"; UV="$ROOT/uv/uv.exe"; else ROOT="$HOME/Library/Application Support/Verbatim"; UV="$ROOT/uv/uv"; fi
-          cp "$UV" "$RUNNER_TEMP/" && UV="$RUNNER_TEMP/$(basename "$UV")"
-          PYTHONIOENCODING=utf-8 "$UV" run --no-project --python 3.11 local/launch.py --uninstall
-          sleep 3
-          ! curl -sf -m 3 http://localhost:8765/api/system
-          test ! -d "$ROOT"
-
-      - name: 保存測試紀錄到 ci-logs 分支
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p ci-log
-          if [ "$RUNNER_OS" = "Windows" ]; then R="$LOCALAPPDATA/Verbatim"; else R="$HOME/Library/Application Support/Verbatim"; fi
-          cp "$R/launcher.log" ci-log/ 2>/dev/null || true; cp "$R/engine.log" ci-log/ 2>/dev/null || true
-          ls -la "$R" "$R/uv" > ci-log/files.txt 2>&1 || true
-          cd ci-log && git init -q && git checkout -q -b "ci-logs-${{ runner.os }}"
-          echo "${{ github.sha }} ${{ job.status }} $(date -u +%FT%TZ)" > RESULT.txt
-          git add -A && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "log ${{ github.sha }}"
-          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" "ci-logs-${{ runner.os }}"
-
   publish:
-    name: 三個平台都通過，發佈到 stable
-    needs: [e2e, local]
+    name: 測試通過，發佈到 stable
+    needs: [e2e]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
