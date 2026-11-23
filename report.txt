@@ -1,0 +1,18 @@
+FILES: ['.gitattributes', 'README.md', 'added_tokens.json', 'config.json', 'generation_config.json', 'merges.txt', 'normalizer.json', 'onnx/decoder_model_merged_q4.onnx', 'onnx/decoder_model_merged_q4f16.onnx', 'onnx/decoder_model_merged_q4f16.onnx_data', 'onnx/decoder_model_merged_quantized.onnx', 'onnx/encoder_model_q4.onnx', 'onnx/encoder_model_q4f16.onnx', 'onnx/encoder_model_q4f16.onnx_data', 'onnx/encoder_model_quantized.onnx', 'preprocessor_config.json', 'quantize_config.json', 'special_tokens_map.json', 'tokenizer.json', 'tokenizer_config.json', 'vocab.json']
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+== onnx/encoder_model_q4f16.onnx size=568095 opset=[('', 14), ('com.microsoft', 1)]
+   external data locations (tensor count): {'encoder_model_q4f16.onnx_data': 1199}
+   sample Concat_2 nodes: []
+
+== onnx/decoder_model_merged_q4f16.onnx size=3864944 opset=[('', 14), ('com.microsoft', 1)]
+   external data locations (tensor count): {'decoder_model_merged_q4f16.onnx_data': 6742}
+   sample Concat_2 nodes: []
+
+== onnx/encoder_model_q4.onnx size=424255901 opset=[('', 14), ('com.microsoft', 1)]
+   external data locations (tensor count): {}
+   sample Concat_2 nodes: []
+
+== onnx/decoder_model_merged_q4.onnx size=798074461 opset=[('', 14), ('com.microsoft', 1)]
+   external data locations (tensor count): {}
+   sample Concat_2 nodes: []
