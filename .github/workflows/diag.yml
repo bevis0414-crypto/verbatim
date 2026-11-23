@@ -6,41 +6,13 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
       - run: pip install -q onnx huggingface_hub
       - name: 檢查 Breeze ONNX 的外部資料設定
         run: |
           mkdir -p out
-          python - <<'PY' 2>&1 | tee out/report.txt
-          import onnx, os
-          from huggingface_hub import hf_hub_download, list_repo_files
-          repo = "markno5/Breeze-ASR-25-ONNX"
-          print("FILES:", [f for f in list_repo_files(repo)])
-          for f in ["onnx/encoder_model_q4f16.onnx", "onnx/decoder_model_merged_q4f16.onnx", "onnx/encoder_model_q4.onnx", "onnx/decoder_model_merged_q4.onnx"]:
-              p = hf_hub_download(repo, f)
-              m = onnx.load(p, load_external_data=False)
-              locs, n_ext = {}, 0
-              for t in list(m.graph.initializer) + [a.t for node in m.graph.node for a in node.attribute if a.type == onnx.AttributeProto.TENSOR]:
-                  if t.data_location == onnx.TensorProto.EXTERNAL:
-                      n_ext += 1
-                      d = {e.key: e.value for e in t.external_data}
-                      locs[d.get("location")] = locs.get(d.get("location"), 0) + 1
-              # 子圖（If 節點，merged decoder 會有）
-              def walk(g, acc):
-                  for node in g.node:
-                      for a in node.attribute:
-                          if a.type == onnx.AttributeProto.GRAPH:
-                              for t in a.g.initializer:
-                                  if t.data_location == onnx.TensorProto.EXTERNAL:
-                                      d = {e.key: e.value for e in t.external_data}; acc[d.get("location")] = acc.get(d.get("location"), 0) + 1
-                              walk(a.g, acc)
-                          if a.type == onnx.AttributeProto.TENSOR and a.t.data_location == onnx.TensorProto.EXTERNAL:
-                              d = {e.key: e.value for e in a.t.external_data}; acc["(attr)" + str(d.get("location"))] = acc.get("(attr)" + str(d.get("location")), 0) + 1
-              sub = {}; walk(m.graph, sub)
-              print(f"\n== {f}  size={os.path.getsize(p)}  opset={[ (o.domain, o.version) for o in m.opset_import]}")
-              print("   external initializers:", n_ext, "locations:", locs)
-              print("   external in subgraphs/attrs:", sub)
-              print("   ops:", sorted({n.op_type for n in m.graph.node})[:40])
-          PY
+          python tools/inspect_onnx.py > out/report.txt 2>&1 || true
+          cat out/report.txt
       - name: 保存結果
         if: always()
         run: |
