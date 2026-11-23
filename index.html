@@ -340,10 +340,10 @@ const MODELS = [
   {key:'small', name:'Small', desc:'最快，適合先試聽大概內容。', acc:2, spd:4},
 ];
 const WEB_MODELS = [   // 瀏覽器（WebGPU）可用的模型：transformers.js 的 ONNX 版本；dtypes 依序嘗試，載不進就換下一種
-  {key:'large-v2', repo:'Xenova/whisper-large-v2', name:'Large v2', desc:'你習慣的版本。檔案大（約 2 GB），需要獨立顯示卡；第一次載入較久。', acc:4, spd:1, big:true,
-   dtypes:[{encoder_model:'fp16', decoder_model_merged:'q4'}, {encoder_model:'q8', decoder_model_merged:'q8'}, 'q8']},
-  {key:'breeze', repo:'markno5/Breeze-ASR-25-ONNX', name:'Large v2 臺灣華語版（Breeze）', desc:'聯發科以 Large v2 為基礎，針對臺灣華語、中英夾雜優化。檔案大，需要獨立顯示卡。', acc:4, spd:1, big:true,
-   dtypes:['q8', {encoder_model:'fp16', decoder_model_merged:'q4'}]},
+  // Large v2：用聯發科 Breeze-ASR-25（以 Whisper large-v2 微調，針對臺灣華語、中英夾雜）的 q4f16 版本，全程在顯示卡上算。
+  // 原版 Xenova/whisper-large-v2 只有 fp32／q8，q8 在 WebGPU 上會退回 CPU，超過瀏覽器記憶體上限（std::bad_alloc），所以不提供。
+  {key:'breeze', repo:'markno5/Breeze-ASR-25-ONNX', name:'Large v2（臺灣華語版）', desc:'以 Large v2 為基礎，聯發科針對臺灣華語、中英夾雜優化。第一次下載約 1.5 GB，需要支援 fp16 的顯示卡。', acc:4, spd:2, big:true, f16:true,
+   dtypes:['q4f16']},
   {key:'turbo', repo:'onnx-community/whisper-large-v3-turbo', name:'Large v3 Turbo', desc:'準確度接近 Large v2、速度快很多。第一次下載約 1 GB。', acc:4, spd:3, f16:true},
   {key:'small', repo:'onnx-community/whisper-small', name:'Small', desc:'準確度與速度平衡。第一次下載約 250 MB。', acc:3, spd:3},
   {key:'base', repo:'onnx-community/whisper-base', name:'Base', desc:'最快，適合先試聽大概內容。約 80 MB。', acc:2, spd:4},
@@ -373,7 +373,7 @@ $('deco').innerHTML = Array.from({length:70}, (_, i) => { const a = 6 + Math.abs
 /* ---------- 偏好 ---------- */
 const P = store.get('prefs', {});
 if (MODELS.some(m => m.key === P.model)) S.model = P.model;
-S.webModel = WEB_MODELS.some(m => m.key === P.webModel) ? P.webModel : 'large-v2';
+S.webModel = WEB_MODELS.some(m => m.key === P.webModel) ? P.webModel : 'breeze';
 for (const [id, k] of [['lang','lang'],['spk','spk'],['hint','hint']]) if (P[k] !== undefined) $(id).value = P[k];
 for (const [id, k] of [['trad','trad'],['showTs','showTs'],['merge','merge'],['showAi','showAi'],['autoClear','autoClear']]) if (P[k] !== undefined) $(id).checked = P[k];
 const savePrefs = () => store.set('prefs', {model:S.model, webModel:S.webModel, lang:$('lang').value, spk:$('spk').value, hint:$('hint').value,
@@ -384,7 +384,7 @@ const savePrefs = () => store.set('prefs', {model:S.model, webModel:S.webModel, 
 const pips = n => `<span class="pips">${[1,2,3,4].map(i => `<i class="${i<=n?'f':''}"></i>`).join('')}</span>`;
 function renderModels() {
   const busy = S.status === 'run', cpu = S.sys && !S.sys.mock && S.sys.device === 'cpu';
-  const tag = m => isWeb() ? (S.webFailed?.has(m.key) ? '<span class="tag" style="color:var(--acc)">這台電腦跑不動</span>' : S.webCached?.has(m.key) ? `<span class="tag ok">✓ 已下載${S.webSize?.[m.key] ? ' ' + mb(S.webSize[m.key]) : ''}<span class="del" data-del="${m.key}" role="button" tabindex="0">刪除</span></span>` : m.big ? '<span class="tag" style="color:#f7c948">檔案大</span>' : '<span class="tag">需下載</span>')
+  const tag = m => isWeb() ? (S.webFailed?.has(m.key) ? '<span class="tag" style="color:var(--acc)">這台電腦跑不動</span>' : m.f16 && S.sys && !S.sys.f16 ? '<span class="tag" style="color:var(--acc)">這張顯示卡不支援</span>' : S.webCached?.has(m.key) ? `<span class="tag ok">✓ 已下載${S.webSize?.[m.key] ? ' ' + mb(S.webSize[m.key]) : ''}<span class="del" data-del="${m.key}" role="button" tabindex="0">刪除</span></span>` : m.big ? '<span class="tag" style="color:#f7c948">檔案大</span>' : '<span class="tag">需下載</span>')
     : S.sys?.loaded === m.key ? '<span class="tag ok">● 已載入</span>' : cpu && m.acc >= 4 ? '<span class="tag" style="color:var(--acc)">沒有 GPU 時很慢</span>' : '';
   $('models').innerHTML = curModels().map(m => `<button class="mdl${curKey()===m.key?' on':''}" data-k="${m.key}" ${busy?'disabled':''}>
     <b>${m.name}</b>${tag(m)}<p>${m.desc}</p>
@@ -419,6 +419,7 @@ async function useBrowser() {
   S.sys = {browser: true, device: 'webgpu', ready: true, f16: ad.features?.has?.('shader-f16') ?? false,
            gpu: (info.description || [info.vendor, info.architecture].filter(Boolean).join(' ') || 'GPU').replace(/^./, c => c.toUpperCase())};
 
+  if (!S.sys.f16 && WEB_MODELS.find(x => x.key === S.webModel)?.f16) S.webModel = 'small';
   await webCheckCached(); setChip(true); applyMode();
   view(S.file ? 'file' : 'drop');
   toast(`已改用這台電腦的 GPU（${S.sys.gpu}）`);
@@ -864,6 +865,7 @@ async function webCheckCached() {
   try {
     const c = await caches.open('transformers-cache');
     for (const req of await c.keys()) {
+      if (req.url.includes('/Xenova/whisper-large-v2/')) { await c.delete(req); continue; }  // 舊版原版 Large v2（瀏覽器跑不動）的檔案，自動清掉
       const m = WEB_MODELS.find(x => req.url.includes('/' + x.repo + '/')); if (!m) continue;
       if (req.url.includes('.onnx')) S.webCached.add(m.key);
       const len = +((await c.match(req))?.headers.get('content-length') || 0); S.webSize[m.key] = (S.webSize[m.key] || 0) + len;
@@ -989,7 +991,11 @@ async function webTranscribe() {
   } catch (e) {
     console.error(e);
     if (S.file !== f) return;
-    const msg = /decode|Unable to decode|EncodingError/i.test(e.message) ? '瀏覽器讀不了這個檔案的聲音，試試轉成 mp3 或 m4a' : '轉錄失敗：' + e.message;
+    let msg = /decode|Unable to decode|EncodingError/i.test(e.message) ? '瀏覽器讀不了這個檔案的聲音，試試轉成 mp3 或 m4a' : '轉錄失敗：' + e.message;
+    if (/bad_alloc|out of memory|OOM|allocation|device (was )?lost|Device lost/i.test(e.message)) {
+      (S.webFailed ||= new Set()).add(S.webModel); wk?.terminate(); wk = null; wkPending.clear(); W.loaded = null; renderModels();
+      msg = `記憶體不足：這台電腦的顯示卡或瀏覽器記憶體不夠跑 ${m.name}。已轉好的 ${S.segs.length} 句會保留；可以改選 Large v3 Turbo 或 Small 再轉，或關掉其他分頁後再試一次。`;
+    }
     finish('', msg, true);
   }
 }
