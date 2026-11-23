@@ -93,18 +93,20 @@ jobs:
         env:
           MSYS_NO_PATHCONV: "1"   # Windows 的 bash 預設會把 /v 之類的參數當成路徑改寫
         run: |
-          mkdir -p ci-log; exec > >(tee ci-log/check.txt) 2>&1
-          sleep 5
-          curl -sf http://localhost:8765/api/system | tee "$RUNNER_TEMP/sys.json"; echo
-          grep -q '"local":true' "$RUNNER_TEMP/sys.json"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v VerbatimEngine
-          else
-            test -f "$HOME/Library/LaunchAgents/io.github.verbatim.engine.plist"
-          fi
-          curl -sf -X OPTIONS http://localhost:8765/api/system -H "Origin: https://bevis0414-crypto.github.io" \
-            -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Private-Network: true" -D - -o /dev/null \
-            | grep -i "access-control-allow-private-network: true"
+          mkdir -p ci-log
+          {
+            sleep 5
+            curl -sf http://localhost:8765/api/system | tee "$RUNNER_TEMP/sys.json"; echo
+            grep -q '"local":true' "$RUNNER_TEMP/sys.json" && echo "OK 引擎在背景待命"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v VerbatimEngine && echo "OK 開機啟動"
+            else
+              test -f "$HOME/Library/LaunchAgents/io.github.verbatim.engine.plist" && echo "OK 開機啟動"
+            fi
+            curl -sf -X OPTIONS http://localhost:8765/api/system -H "Origin: https://bevis0414-crypto.github.io" \
+              -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Private-Network: true" -D "$RUNNER_TEMP/h.txt" -o "$RUNNER_TEMP/b.txt"
+            grep -qi "access-control-allow-private-network: true" "$RUNNER_TEMP/h.txt" && echo "OK 私人網路存取"
+          } 2>&1 | tee ci-log/check.txt
 
       - name: 端對端測試（轉錄、講者分辨、AI 校對，用安裝好的環境）
         shell: bash
