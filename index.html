@@ -342,8 +342,9 @@ const MODELS = [
 const WEB_MODELS = [   // 瀏覽器（WebGPU）可用的模型：transformers.js 的 ONNX 版本；dtypes 依序嘗試，載不進就換下一種
   // Large v2：用聯發科 Breeze-ASR-25（以 Whisper large-v2 微調，針對臺灣華語、中英夾雜）的 q4f16 版本，全程在顯示卡上算。
   // 原版 Xenova/whisper-large-v2 只有 fp32／q8，q8 在 WebGPU 上會退回 CPU，超過瀏覽器記憶體上限（std::bad_alloc），所以不提供。
-  {key:'breeze', repo:'markno5/Breeze-ASR-25-ONNX', name:'Large v2（臺灣華語版）', desc:'以 Large v2 為基礎，聯發科針對臺灣華語、中英夾雜優化。第一次下載約 1.5 GB，需要支援 fp16 的顯示卡。', acc:4, spd:2, big:true, f16:true,
-   dtypes:['q4f16']},
+  // q4f16 的權重放在另外的 .onnx_data 檔，要告訴載入程式一起下載（ext:true）；不行就改用不拆檔的 q4（不需要 fp16）
+  {key:'breeze', repo:'markno5/Breeze-ASR-25-ONNX', name:'Large v2（臺灣華語版）', desc:'以 Large v2 為基礎，聯發科針對臺灣華語、中英夾雜優化。第一次下載約 1.5 GB，需要獨立顯示卡。', acc:4, spd:2, big:true,
+   dtypes:[{dtype:'q4f16', ext:true, needF16:true}, {dtype:'q4', ext:false}]},
   {key:'turbo', repo:'onnx-community/whisper-large-v3-turbo', name:'Large v3 Turbo', desc:'準確度接近 Large v2、速度快很多。第一次下載約 1 GB。', acc:4, spd:3, f16:true},
   {key:'small', repo:'onnx-community/whisper-small', name:'Small', desc:'準確度與速度平衡。第一次下載約 250 MB。', acc:3, spd:3},
   {key:'base', repo:'onnx-community/whisper-base', name:'Base', desc:'最快，適合先試聽大概內容。約 80 MB。', acc:2, spd:4},
@@ -830,7 +831,7 @@ self.onmessage = async ({ data: m }) => {
     if (m.type === 'load') {
       if (key !== m.key) {
         if (asr) { try { await asr.dispose(); } catch {} asr = null; key = null; }
-        asr = await pipeline('automatic-speech-recognition', m.repo, { device: 'webgpu', dtype: m.dtype,
+        asr = await pipeline('automatic-speech-recognition', m.repo, { device: 'webgpu', dtype: m.dtype, use_external_data_format: m.ext,
           progress_callback: p => { if (p.status === 'progress_total') postMessage({ type: 'dl', progress: p.progress, loaded: p.loaded, total: p.total }); } });
         key = m.key;
       }
@@ -940,11 +941,12 @@ async function webTranscribe() {
     // 2. 載入模型（第一次會下載，之後從瀏覽器快取讀）
     if (lang !== 'en') await loadOpenCC();
     if (W.loaded !== m.key) {
-      const tries = m.dtypes || [{encoder_model: m.f16 && S.sys.f16 ? 'fp16' : 'fp32', decoder_model_merged: 'q4'}];
+      const tries = (m.dtypes || [{dtype: {encoder_model: m.f16 && S.sys.f16 ? 'fp16' : 'fp32', decoder_model_merged: 'q4'}}])
+        .filter(t => !t.needF16 || S.sys.f16);
       let lastErr = null;
       for (const dt of tries) {
         setStatus('run', S.webCached?.has(m.key) ? '載入模型中…' : `準備下載模型（只有第一次${m.big ? '，檔案較大請稍候' : ''}）…`, 0);
-        try { await wkCall({type: 'load', key: m.key + JSON.stringify(dt), repo: m.repo, dtype: dt}); lastErr = null; break; }
+        try { await wkCall({type: 'load', key: m.key + JSON.stringify(dt), repo: m.repo, dtype: dt.dtype, ext: dt.ext ?? null}); lastErr = null; break; }
         catch (e) { lastErr = e; console.warn('載入失敗，換下一種格式', dt, e); }
         if (S.status !== 'run') return finish('', '已停止');
       }
