@@ -1,0 +1,146 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+system: {'app': 'verbatim', 'version': '2026.11.23-3', 'pid': 1308, 'local': False, 'os': 'win32', 'device': 'cpu', 'gpu': None, 'note': '', 'ready': True, 'mock': False, 'loaded': None}
+{
+ "id": "fc109acfd6",
+ "status": "done",
+ "progress": 1.0,
+ "duration": 35.23,
+ "language": "zh",
+ "error": null,
+ "warning": null,
+ "rev": 1,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 8.0,
+   "text": "大家好，今天的工作方主要向清清各位對工人擺散了想法。",
+   "speaker": 0
+  },
+  {
+   "start": 8.0,
+   "end": 12.0,
+   "text": "我覺得包袋朝下的登臺人晚上都會他。",
+   "speaker": 1
+  },
+  {
+   "start": 12.0,
+   "end": 16.0,
+   "text": "得檢了趙明世記憶在一起。",
+   "speaker": 0
+  },
+  {
+   "start": 16.0,
+   "end": 19.0,
+   "text": "還有其他意見嗎？",
+   "speaker": 0
+  },
+  {
+   "start": 19.0,
+   "end": 22.0,
+   "text": "很多長輩希望做一點有遮蔭的對移，",
+   "speaker": 2
+  },
+  {
+   "start": 22.0,
+   "end": 24.0,
+   "text": "可以坐下來休息。",
+   "speaker": 2
+  },
+  {
+   "start": 24.0,
+   "end": 26.0,
+   "text": "另外自盡徹期的很快，",
+   "speaker": 1
+  },
+  {
+   "start": 26.0,
+   "end": 29.0,
+   "text": "最後把葡萄殼射到村臺。",
+   "speaker": 1
+  },
+  {
+   "start": 29.0,
+   "end": 32.0,
+   "text": "好我們把這些意見遞下來",
+   "speaker": 0
+  },
+  {
+   "start": 32.0,
+   "end": 34.5,
+   "text": "下一個輪帶討論推論",
+   "speaker": 0
+  }
+ ],
+ "full": true,
+ "ahead": 0
+}
+diag: {"version": "2026.11.23-3", "python": "3.11.9", "device": "cpu", "gpu": null, "note": "", "model": "small", "speaker_model": "ok", "packages": {"faster-whisper": "1.2.1", "ctranslate2": "4.9.0", "sherpa-onnx": "2.0.2", "nvidia-cublas-cu12": "12.9.2.10", "nvidia-cudnn-cu12": "9.28.1.4", "numpy": "2.4.6"}, "errors": [], "log_tail": []}
+proofread: {
+ "status": "done",
+ "done": 10,
+ "total": 10,
+ "error": null,
+ "result": [
+  {
+   "text": "大家好，今天的工作方主要向清清各位對工人擺散了想法。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "我覺得包袋朝下的登臺人晚上都會他。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "得檢了趙明世記憶在一起。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "還有其他意見嗎？",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "很多長輩希望做一點有遮蔭的對移，",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "可以坐下來休息。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "另外自盡徹期的很快，",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "最後把葡萄殼射到村臺。",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "好我們把這些意見遞下來",
+   "para": false,
+   "changed": false
+  },
+  {
+   "text": "下一個輪帶討論推論",
+   "para": false,
+   "changed": false
+  }
+ ]
+}
+✅ 完成
+✅ 沒有警告
+✅ 有逐字稿
+✅ 繁體輸出
+✅ 內容大致正確
+✅ 沒有「壹」
+✅ 講者人數
+✅ 校對完成
+✅ 校對沒有掉句
+✅ 校對後仍是繁體

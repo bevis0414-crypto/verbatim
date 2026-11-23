@@ -1,0 +1,8 @@
+{"app":"verbatim","version":"2026.11.23-3","pid":7092,"local":true,"os":"win32","device":"cpu","gpu":null,"note":"","ready":true,"mock":false,"loaded":null}
+OK 引擎在背景待命
+
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+    VerbatimEngine    REG_SZ    "C:\Users\runneradmin\AppData\Local\Verbatim\uv\uvw.exe" "run" "--no-project" "--python" "3.11" "C:\Users\runneradmin\AppData\Local\Verbatim\launch.py" "--background"
+
+OK 開機啟動
+OK 私人網路存取

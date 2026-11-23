@@ -1,0 +1,19 @@
+[準備] 下載安裝工具 uv ...
+downloading uv 0.11.32 (x86_64-pc-windows-msvc)
+installing to C:\Users\runneradmin\AppData\Local\Verbatim\uv
+  uv.exe
+  uvx.exe
+  uvw.exe
+everything's installed!
+── 逐字 Verbatim 本機引擎 ──
+安裝位置：C:\Users\runneradmin\AppData\Local\Verbatim
+① 下載轉錄引擎…
+② 準備執行環境…
+準備執行環境（第一次約 3–5 分鐘，之後只有更新時才會再裝）…
+③ 設定開機自動啟動…
+④ 啟動引擎…
+✅ 安裝完成！引擎版本 2026.11.23-3，使用 CPU。
+   之後每次開機都會自動在背景待命，直接打開逐字網站就能用。
+   第一次連線時 Chrome 會詢問是否允許存取這台裝置，請按「允許」。
+
+這個視窗可以關掉了。
