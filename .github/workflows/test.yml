@@ -90,9 +90,13 @@ jobs:
 
       - name: 確認引擎在背景待命、只聽本機、已設定開機啟動
         shell: bash
+        env:
+          MSYS_NO_PATHCONV: "1"   # Windows 的 bash 預設會把 /v 之類的參數當成路徑改寫
         run: |
-          curl -sf http://localhost:8765/api/system | tee /tmp/sys.json
-          grep -q '"local":true' /tmp/sys.json
+          mkdir -p ci-log; exec > >(tee ci-log/check.txt) 2>&1
+          sleep 5
+          curl -sf http://localhost:8765/api/system | tee "$RUNNER_TEMP/sys.json"; echo
+          grep -q '"local":true' "$RUNNER_TEMP/sys.json"
           if [ "$RUNNER_OS" = "Windows" ]; then
             reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v VerbatimEngine
           else
